@@ -6,6 +6,8 @@ import VisoreKit
 struct VisoreApp: App {
     @StateObject private var stato = StatoVisore()
 
+    init() { StatoVisore.pulisciGliAvanzi() }
+
     var body: some Scene {
         WindowGroup {
             Group {
@@ -28,17 +30,31 @@ final class StatoVisore: ObservableObject {
     @Published var pacchetto: Pacchetto?
     @Published var errore: String?
     @Published var occupato = false
+    private var cartellaAperta: URL?
+
+    nonisolated static func pulisciGliAvanzi() {
+        let cartella = FileManager.default.temporaryDirectory
+        let dentro = (try? FileManager.default.contentsOfDirectory(at: cartella, includingPropertiesForKeys: nil)) ?? []
+        for file in dentro where ["db", "mov"].contains(file.pathExtension) {
+            try? FileManager.default.removeItem(at: file)
+        }
+    }
 
     func apri(cartella: URL, password: String) {
         occupato = true
         errore = nil
         Task.detached(priority: .userInitiated) {
             let accesso = cartella.startAccessingSecurityScopedResource()
-            defer { if accesso { cartella.stopAccessingSecurityScopedResource() } }
             do {
                 let p = try Pacchetto(cartella: cartella, password: password)
                 Portachiavi.salva(password: password, cartella: cartella)
-                await MainActor.run { self.pacchetto = p; self.occupato = false }
+                await MainActor.run {
+                    self.lasciaLaCartella()
+                    if accesso { self.cartellaAperta = cartella }
+                    self.pacchetto = p
+                    self.occupato = false
+                }
+                return
             } catch ErroreVisore.passwordSbagliata {
                 Portachiavi.dimentica()
                 await MainActor.run { self.errore = "La password non apre questo pacchetto. È la stessa del forziere sul computer."; self.occupato = false }
@@ -47,7 +63,13 @@ final class StatoVisore: ObservableObject {
             } catch {
                 await MainActor.run { self.errore = "Il pacchetto non si apre: va ricopiato dal computer."; self.occupato = false }
             }
+            if accesso { cartella.stopAccessingSecurityScopedResource() }
         }
+    }
+
+    private func lasciaLaCartella() {
+        cartellaAperta?.stopAccessingSecurityScopedResource()
+        cartellaAperta = nil
     }
 
     func apriConFaceID() {
@@ -58,7 +80,10 @@ final class StatoVisore: ObservableObject {
         }
     }
 
-    func chiudi() { pacchetto = nil }
+    func chiudi() {
+        pacchetto = nil
+        lasciaLaCartella()
+    }
 }
 
 struct Sblocco: View {
@@ -98,6 +123,8 @@ struct Galleria: View {
     let pacchetto: Pacchetto
     @State private var scatti: [Scatto] = []
     @State private var cerca = ""
+    @State private var finiti = false
+    private static let pagina = 300
 
     var body: some View {
         NavigationStack {
@@ -107,6 +134,7 @@ struct Galleria: View {
                         NavigationLink { Dettaglio(pacchetto: pacchetto, scatto: s) } label: {
                             Miniatura(pacchetto: pacchetto, posto: s.mini ?? s.posto)
                         }
+                        .onAppear { if s.id == scatti.last?.id { altri() } }
                     }
                 }
             }
@@ -121,7 +149,20 @@ struct Galleria: View {
     }
 
     private func carica(_ testo: String) {
-        scatti = (try? testo.isEmpty ? pacchetto.archivio.scatti() : pacchetto.archivio.cerca(testo)) ?? []
+        if testo.isEmpty {
+            scatti = (try? pacchetto.archivio.scatti(limite: Galleria.pagina)) ?? []
+            finiti = scatti.count < Galleria.pagina
+        } else {
+            scatti = (try? pacchetto.archivio.cerca(testo)) ?? []
+            finiti = true
+        }
+    }
+
+    private func altri() {
+        guard !finiti, cerca.isEmpty else { return }
+        let nuovi = (try? pacchetto.archivio.scatti(limite: Galleria.pagina, dopo: scatti.count)) ?? []
+        finiti = nuovi.count < Galleria.pagina
+        scatti += nuovi
     }
 }
 

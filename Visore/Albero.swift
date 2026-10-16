@@ -14,7 +14,7 @@ struct Albero: View {
                 Section {
                     Toggle("Solo qui", isOn: $soloQui)
                     NavigationLink("Vedi \(soloQui ? genitore.quanti : genitore.quantiColRamo) scatti") {
-                        Griglia(pacchetto: pacchetto, scatti: (try? pacchetto.archivio.scatti(nodo: genitore.id, soloQui: soloQui)) ?? [])
+                        Griglia(pacchetto: pacchetto, scatti: (try? pacchetto.archivio.scatti(nodo: genitore.id, soloQui: soloQui, limite: 100_000)) ?? [])
                             .navigationTitle(genitore.nome)
                     }
                 }
