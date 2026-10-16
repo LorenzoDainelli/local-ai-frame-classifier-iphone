@@ -1,0 +1,17 @@
+{
+  "vuoto": {
+    "posto": "foto/ab/vuoto",
+    "dimensione": 0,
+    "impronta": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "corto": {
+    "posto": "foto/ab/corto",
+    "dimensione": 21,
+    "impronta": "92afb87cf70b0cf832b805505c4cb096ac2a01c1e6d839641e4c4a8baa3f3b4c"
+  },
+  "lungo": {
+    "posto": "foto/ab/lungo",
+    "dimensione": 1048699,
+    "impronta": "3c93b28117eff822fab384726ed3d4b80d5116f27060c4db6db2ef795e6fb644"
+  }
+}

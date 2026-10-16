@@ -1,0 +1,18 @@
+{
+  "telefono": "telefono finto",
+  "archivio": "archivio finto",
+  "sale": "000102030405060708090a0b0c0d0e0f",
+  "prova": "bc61055c60a8ede89579849582c87218d532607cd7a9f659e428eb28c9b4a1d7f239fb95c3",
+  "versione_formato": 2,
+  "stato": "completo",
+  "quanti_scatti": 2,
+  "quanti_video": 0,
+  "dal_giorno": "2020-01-01",
+  "al_giorno": "2020-01-02",
+  "kdf": "scrypt",
+  "n": 32768,
+  "r": 8,
+  "p": 1,
+  "blocco": 1048576,
+  "cifra": "AES-256-GCM"
+}
