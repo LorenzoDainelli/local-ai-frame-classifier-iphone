@@ -30,7 +30,7 @@ final class StatoVisore: ObservableObject {
     @Published var pacchetto: Pacchetto?
     @Published var errore: String?
     @Published var occupato = false
-    private var cartellaAperta: URL?
+    @Published var aggiorno = false
 
     nonisolated static func pulisciGliAvanzi() {
         let cartella = FileManager.default.temporaryDirectory
@@ -38,23 +38,41 @@ final class StatoVisore: ObservableObject {
         for file in dentro where ["db", "mov"].contains(file.pathExtension) {
             try? FileManager.default.removeItem(at: file)
         }
+        Deposito.scarta(Deposito.interna.deletingLastPathComponent().appendingPathComponent("Pacchetto.in-arrivo"))
     }
 
-    func apri(cartella: URL, password: String) {
+    func apri(sorgente: URL?, password: String) {
         occupato = true
         errore = nil
         Task.detached(priority: .userInitiated) {
-            let accesso = cartella.startAccessingSecurityScopedResource()
-            do {
-                let p = try Pacchetto(cartella: cartella, password: password)
-                Portachiavi.salva(password: password, cartella: cartella)
-                await MainActor.run {
-                    self.lasciaLaCartella()
-                    if accesso { self.cartellaAperta = cartella }
-                    self.pacchetto = p
-                    self.occupato = false
+            var nuova: URL?
+            if let sorgente {
+                let accesso = sorgente.startAccessingSecurityScopedResource()
+                defer { if accesso { sorgente.stopAccessingSecurityScopedResource() } }
+                if Deposito.serveAggiornare(da: sorgente) {
+                    await MainActor.run { self.aggiorno = true }
+                    nuova = try? Deposito.importa(da: sorgente)
+                    await MainActor.run { self.aggiorno = false }
+                    if nuova == nil && !Deposito.c_e {
+                        await MainActor.run { self.errore = "Il pacchetto non si copia: controlla che sia tutto sull'iPhone e riprova."; self.occupato = false }
+                        return
+                    }
                 }
-                return
+            }
+            do {
+                let p: Pacchetto
+                if let nuova {
+                    do {
+                        _ = try Pacchetto(cartella: nuova, password: password)
+                    } catch {
+                        Deposito.scarta(nuova)
+                        throw error
+                    }
+                    try Deposito.sostituisci(con: nuova)
+                }
+                p = try Pacchetto(cartella: Deposito.interna, password: password)
+                Portachiavi.salva(password: password, cartella: sorgente)
+                await MainActor.run { self.pacchetto = p; self.occupato = false }
             } catch ErroreVisore.passwordSbagliata {
                 Portachiavi.dimentica()
                 await MainActor.run { self.errore = "La password non apre questo pacchetto. È la stessa del forziere sul computer."; self.occupato = false }
@@ -63,26 +81,20 @@ final class StatoVisore: ObservableObject {
             } catch {
                 await MainActor.run { self.errore = "Il pacchetto non si apre: va ricopiato dal computer."; self.occupato = false }
             }
-            if accesso { cartella.stopAccessingSecurityScopedResource() }
         }
     }
 
-    private func lasciaLaCartella() {
-        cartellaAperta?.stopAccessingSecurityScopedResource()
-        cartellaAperta = nil
-    }
-
     func apriConFaceID() {
-        guard let cartella = Portachiavi.cartella() else { return }
+        let sorgente = Portachiavi.cartella()
+        guard sorgente != nil || Deposito.c_e else { return }
         Task.detached(priority: .userInitiated) {
             guard let password = Portachiavi.leggi() else { return }
-            await MainActor.run { self.apri(cartella: cartella, password: password) }
+            await MainActor.run { self.apri(sorgente: sorgente, password: password) }
         }
     }
 
     func chiudi() {
         pacchetto = nil
-        lasciaLaCartella()
     }
 }
 
@@ -100,19 +112,19 @@ struct Sblocco: View {
                 .textFieldStyle(.roundedBorder)
                 .textContentType(.password)
             Button("Apri") {
-                if let cartella { stato.apri(cartella: cartella, password: password) }
+                stato.apri(sorgente: cartella ?? Portachiavi.cartella(), password: password)
             }
             .buttonStyle(.borderedProminent)
-            .disabled(cartella == nil || password.count < 8 || stato.occupato)
-            if Portachiavi.c_e {
+            .disabled((cartella == nil && !Deposito.c_e) || password.count < 8 || stato.occupato)
+            if Portachiavi.c_e || Deposito.c_e {
                 Button("Apri con Face ID o codice") { stato.apriConFaceID() }
                     .disabled(stato.occupato)
             }
-            if stato.occupato { ProgressView() }
+            if stato.aggiorno { ProgressView("Copio il pacchetto nuovo…") } else if stato.occupato { ProgressView() }
             if let errore = stato.errore { Text(errore).foregroundStyle(.red).multilineTextAlignment(.center) }
         }
         .padding()
-        .onAppear { if Portachiavi.c_e { stato.apriConFaceID() } }
+        .onAppear { if Portachiavi.c_e || Deposito.c_e { stato.apriConFaceID() } }
         .fileImporter(isPresented: $scegli, allowedContentTypes: [.folder]) { esito in
             if case .success(let url) = esito { cartella = url }
         }

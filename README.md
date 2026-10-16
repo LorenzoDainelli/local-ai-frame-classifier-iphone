@@ -17,6 +17,14 @@ depositi pubblici), fa le prove di VisoreKit, costruisce `Visore.ipa` senza
 firma e lo mette nel rilascio «ultima». Dal PC Windows si installa con
 SideStore o AltStore, che lo firmano con il tuo ID Apple.
 
+## Dove sta il pacchetto
+
+La prima volta si sceglie la cartella del pacchetto in File. Il Visore la
+copia in una sua cartella privata, che non compare in File e non va nel
+backup di iCloud, e da lì la legge. La cartella scelta resta ricordata: a
+ogni apertura, se dentro c'è un pacchetto nuovo, il Visore lo ricopia da
+solo. Se la cartella non c'è più, apre l'ultima copia.
+
 ## Face ID
 
 La prima volta si scrive la password del forziere; poi l'app la tiene nel

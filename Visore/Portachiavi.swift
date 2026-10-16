@@ -7,7 +7,7 @@ enum Portachiavi {
     static let conto = "password"
     static let segnalibro = "visore.cartella"
 
-    static func salva(password: String, cartella: URL) {
+    static func salva(password: String, cartella: URL?) {
         guard let controllo = SecAccessControlCreateWithFlags(
             nil, kSecAttrAccessibleWhenPasscodeSetThisDeviceOnly, .userPresence, nil) else { return }
         let base: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
@@ -18,7 +18,7 @@ enum Portachiavi {
         nuovo[kSecValueData as String] = Data(password.utf8)
         nuovo[kSecAttrAccessControl as String] = controllo
         guard SecItemAdd(nuovo as CFDictionary, nil) == errSecSuccess else { return }
-        if let dati = try? cartella.bookmarkData() {
+        if let dati = try? cartella?.bookmarkData() {
             UserDefaults.standard.set(dati, forKey: segnalibro)
         }
     }
