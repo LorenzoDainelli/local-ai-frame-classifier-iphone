@@ -37,6 +37,26 @@ public final class Archivio {
     public init(percorso: URL) throws {
         guard sqlite3_open_v2(percorso.path, &db, SQLITE_OPEN_READONLY, nil) == SQLITE_OK else {
             sqlite3_close(db)
+            db = nil
+            throw ErroreVisore.archivioIlleggibile
+        }
+    }
+
+    public init(dati: Data) throws {
+        guard !dati.isEmpty,
+              sqlite3_open_v2(":memory:", &db, SQLITE_OPEN_READWRITE | SQLITE_OPEN_MEMORY, nil) == SQLITE_OK,
+              let spazio = sqlite3_malloc64(sqlite3_uint64(dati.count)) else {
+            sqlite3_close(db)
+            db = nil
+            throw ErroreVisore.archivioIlleggibile
+        }
+        dati.copyBytes(to: spazio.assumingMemoryBound(to: UInt8.self), count: dati.count)
+        let modo = UInt32(SQLITE_DESERIALIZE_FREEONCLOSE | SQLITE_DESERIALIZE_READONLY)
+        let lungo = sqlite3_int64(dati.count)
+        guard sqlite3_deserialize(db, "main", spazio.assumingMemoryBound(to: UInt8.self), lungo, lungo, modo) == SQLITE_OK,
+              (try? righe("SELECT count(*) FROM sqlite_master", []) { $0.intero(0) }) != nil else {
+            sqlite3_close(db)
+            db = nil
             throw ErroreVisore.archivioIlleggibile
         }
     }

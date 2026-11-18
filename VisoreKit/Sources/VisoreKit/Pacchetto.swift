@@ -8,29 +8,19 @@ public final class Pacchetto {
     public let carta: Carta
     public let archivio: Archivio
     private let chiave: Chiave
-    private let copiaInChiaro: URL
 
     public init(cartella: URL, password: String) throws {
         let carta = try Carta.leggi(cartella: cartella)
         guard carta.versioneFormato <= Pacchetto.versioneFormatoLetta else { throw ErroreVisore.versioneNuova }
         guard carta.completa else { throw ErroreVisore.cartaRovinata }
         let chiave = try Chiave.dallaPassword(password, carta: carta)
-        let chiaro = try chiave.decifra(Data(contentsOf: cartella.appendingPathComponent("dati.db")), posto: "dati.db")
-        let dove = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".db")
-        try chiaro.write(to: dove, options: [.atomic, .completeFileProtection])
+        var chiaro = try chiave.decifra(Data(contentsOf: cartella.appendingPathComponent("dati.db")), posto: "dati.db")
+        defer { chiaro.resetBytes(in: 0..<chiaro.count) }
         self.cartella = cartella
         self.carta = carta
         self.chiave = chiave
-        self.copiaInChiaro = dove
-        do {
-            self.archivio = try Archivio(percorso: dove)
-        } catch {
-            try? FileManager.default.removeItem(at: dove)
-            throw error
-        }
+        self.archivio = try Archivio(dati: chiaro)
     }
-
-    deinit { try? FileManager.default.removeItem(at: copiaInChiaro) }
 
     public func apri(_ posto: String) throws -> Data {
         guard Pacchetto.postoSicuro(posto) else { throw ErroreVisore.fileEstraneo }

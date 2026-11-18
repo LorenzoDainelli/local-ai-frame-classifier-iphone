@@ -10,18 +10,24 @@ targets:
   Visore:
     type: application
     platform: iOS
-    sources: [Visore]
+    sources:
+      - path: Visore
+      - path: Prova
+        type: folder
+        buildPhase: resources
     dependencies:
       - package: VisoreKit
     info:
       path: Visore/Info.plist
       properties:
         CFBundleDisplayName: Visore
+        UIUserInterfaceStyle: Dark
         UILaunchScreen: {}
         NSFaceIDUsageDescription: Face ID apre l'archivio senza riscrivere la password.
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: local.visore.app
-        MARKETING_VERSION: "1.0"
-        CURRENT_PROJECT_VERSION: "1"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        MARKETING_VERSION: "3.0"
+        CURRENT_PROJECT_VERSION: "2"

@@ -5,6 +5,7 @@ import VisoreKit
 @main
 struct VisoreApp: App {
     @StateObject private var stato = StatoVisore()
+    @Environment(\.scenePhase) private var fase
 
     init() { StatoVisore.pulisciGliAvanzi() }
 
@@ -17,11 +18,52 @@ struct VisoreApp: App {
                     Sblocco()
                 }
             }
+            .overlay { if fase != .active && stato.pacchetto != nil { Copertura() } }
             .environmentObject(stato)
-            .onReceive(NotificationCenter.default.publisher(for: UIApplication.didEnterBackgroundNotification)) { _ in
-                stato.chiudi()
+            .preferredColorScheme(.dark)
+            .onChange(of: fase) { _, nuova in
+                if nuova == .background { stato.chiudi() }
+                if nuova == .active { stato.rientro() }
             }
         }
+    }
+}
+
+struct Copertura: View {
+    var body: some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+            Text("Visore").font(.largeTitle.bold()).foregroundStyle(.white.opacity(0.6))
+        }
+    }
+}
+
+enum Attesa {
+    static let errori = "visore.password.errori"
+    static let fino = "visore.password.attesa"
+
+    static func secondi(dopoErrori n: Int) -> TimeInterval {
+        guard n > 0 else { return 0 }
+        return min(2 * pow(2, Double(n - 1)), 3600)
+    }
+
+    static var finoA: Date? {
+        guard let quando = UserDefaults.standard.object(forKey: fino) as? Date, quando > Date() else { return nil }
+        return quando
+    }
+
+    static func sbagliata() -> Date {
+        let d = UserDefaults.standard
+        let n = d.integer(forKey: errori) + 1
+        let quando = Date().addingTimeInterval(secondi(dopoErrori: n))
+        d.set(n, forKey: errori)
+        d.set(quando, forKey: fino)
+        return quando
+    }
+
+    static func giusta() {
+        UserDefaults.standard.removeObject(forKey: errori)
+        UserDefaults.standard.removeObject(forKey: fino)
     }
 }
 
@@ -29,8 +71,11 @@ struct VisoreApp: App {
 final class StatoVisore: ObservableObject {
     @Published var pacchetto: Pacchetto?
     @Published var errore: String?
+    @Published var avviso: String?
     @Published var occupato = false
     @Published var aggiorno = false
+    @Published var attesaFino: Date? = Attesa.finoA
+    private var faceIDDaChiedere = true
 
     nonisolated static func pulisciGliAvanzi() {
         let cartella = FileManager.default.temporaryDirectory
@@ -41,7 +86,11 @@ final class StatoVisore: ObservableObject {
         Deposito.scarta(Deposito.interna.deletingLastPathComponent().appendingPathComponent("Pacchetto.in-arrivo"))
     }
 
-    func apri(sorgente: URL?, password: String) {
+    func apri(sorgente: URL?, password: String, scritta: Bool) {
+        if scritta, let fino = Attesa.finoA {
+            attesaFino = fino
+            return
+        }
         occupato = true
         errore = nil
         Task.detached(priority: .userInitiated) {
@@ -71,11 +120,21 @@ final class StatoVisore: ObservableObject {
                     try Deposito.sostituisci(con: nuova)
                 }
                 p = try Pacchetto(cartella: Deposito.interna, password: password)
-                Portachiavi.salva(password: password, cartella: sorgente)
-                await MainActor.run { self.pacchetto = p; self.occupato = false }
+                if scritta { Portachiavi.salva(password: password, cartella: sorgente) }
+                await MainActor.run {
+                    Attesa.giusta()
+                    self.attesaFino = nil
+                    self.avviso = nil
+                    self.pacchetto = p
+                    self.occupato = false
+                }
             } catch ErroreVisore.passwordSbagliata {
-                Portachiavi.dimentica()
-                await MainActor.run { self.errore = "La password non apre questo pacchetto. È la stessa del forziere sul computer."; self.occupato = false }
+                if scritta {
+                    await MainActor.run { self.attesaFino = Attesa.sbagliata(); self.occupato = false }
+                } else {
+                    Portachiavi.dimenticaPassword()
+                    await MainActor.run { self.avviso = "Scrivi la password del forziere."; self.occupato = false }
+                }
             } catch ErroreVisore.versioneNuova {
                 await MainActor.run { self.errore = "Il pacchetto è stato fatto da una versione più nuova. Aggiorna l'app."; self.occupato = false }
             } catch {
@@ -84,17 +143,56 @@ final class StatoVisore: ObservableObject {
         }
     }
 
-    func apriConFaceID() {
-        let sorgente = Portachiavi.cartella()
-        guard sorgente != nil || Deposito.c_e else { return }
+    func apriProva(password: String) {
+        guard let cartella = Bundle.main.url(forResource: "Prova", withExtension: nil) else { return }
+        occupato = true
+        errore = nil
         Task.detached(priority: .userInitiated) {
-            guard let password = Portachiavi.leggi() else { return }
-            await MainActor.run { self.apri(sorgente: sorgente, password: password) }
+            do {
+                let p = try Pacchetto(cartella: cartella, password: password)
+                await MainActor.run { self.avviso = nil; self.pacchetto = p; self.occupato = false }
+            } catch {
+                await MainActor.run { self.errore = "La password della prova è: tre parole che ricordi"; self.occupato = false }
+            }
+        }
+    }
+
+    func rientro() {
+        guard pacchetto == nil, faceIDDaChiedere, !occupato else { return }
+        faceIDDaChiedere = false
+        apriConFaceID()
+    }
+
+    func apriConFaceID() {
+        guard Deposito.c_e || Portachiavi.cartella() != nil else { return }
+        guard Portachiavi.c_e, !Portachiavi.scaduta() else {
+            if Portachiavi.c_e {
+                Portachiavi.dimenticaPassword()
+                avviso = "Sono passati sette giorni, o l'iPhone si è riavviato: scrivi la password del forziere."
+            }
+            return
+        }
+        let sorgente = Portachiavi.cartella()
+        Task.detached(priority: .userInitiated) {
+            let lettura = Portachiavi.leggi()
+            await MainActor.run {
+                switch lettura {
+                case .password(let password):
+                    self.apri(sorgente: sorgente, password: password, scritta: false)
+                case .fallita:
+                    self.avviso = Portachiavi.c_e ? "Face ID non ti ha riconosciuto." : "Troppi Face ID falliti: scrivi la password del forziere."
+                case .annullata:
+                    break
+                case .assente:
+                    self.avviso = "Scrivi la password del forziere."
+                }
+            }
         }
     }
 
     func chiudi() {
         pacchetto = nil
+        faceIDDaChiedere = true
     }
 }
 
@@ -103,31 +201,81 @@ struct Sblocco: View {
     @State private var password = ""
     @State private var cartella: URL?
     @State private var scegli = false
+    @State private var prova = false
 
     var body: some View {
         VStack(spacing: 20) {
             Text("Visore").font(.largeTitle.bold())
-            Button(cartella?.lastPathComponent ?? "Scegli la cartella del pacchetto") { scegli = true }
+            if prova {
+                Text("Prova con 5 foto finte. La password è: tre parole che ricordi")
+                    .foregroundStyle(.secondary).multilineTextAlignment(.center)
+            } else if !Deposito.c_e || cartella != nil {
+                Button(cartella?.lastPathComponent ?? "Scegli la cartella del pacchetto") { scegli = true }
+            }
             SecureField("Password del forziere", text: $password)
                 .textFieldStyle(.roundedBorder)
                 .textContentType(.password)
-            Button("Apri") {
-                stato.apri(sorgente: cartella ?? Portachiavi.cartella(), password: password)
+                .submitLabel(.go)
+                .onSubmit(apri)
+            TastoApri(fino: prova ? nil : stato.attesaFino,
+                      spento: (!prova && cartella == nil && !Deposito.c_e) || password.count < 8 || stato.occupato,
+                      azione: apri)
+            if !Deposito.c_e {
+                Button(prova ? "Torna al mio pacchetto" : "Prova con le foto finte") { prova.toggle() }
+                    .disabled(stato.occupato)
             }
-            .buttonStyle(.borderedProminent)
-            .disabled((cartella == nil && !Deposito.c_e) || password.count < 8 || stato.occupato)
-            if Portachiavi.c_e || Deposito.c_e {
-                Button("Apri con Face ID o codice") { stato.apriConFaceID() }
+            if !prova && Portachiavi.c_e && !Portachiavi.scaduta() {
+                Button("Apri con Face ID") { stato.apriConFaceID() }
                     .disabled(stato.occupato)
             }
             if stato.aggiorno { ProgressView("Copio il pacchetto nuovo…") } else if stato.occupato { ProgressView() }
+            if let avviso = stato.avviso { Text(avviso).foregroundStyle(.secondary).multilineTextAlignment(.center) }
             if let errore = stato.errore { Text(errore).foregroundStyle(.red).multilineTextAlignment(.center) }
         }
         .padding()
-        .onAppear { if Portachiavi.c_e || Deposito.c_e { stato.apriConFaceID() } }
+        .onAppear { if UIApplication.shared.applicationState == .active { stato.rientro() } }
         .fileImporter(isPresented: $scegli, allowedContentTypes: [.folder]) { esito in
             if case .success(let url) = esito { cartella = url }
         }
+    }
+
+    private func apri() {
+        guard password.count >= 8, !stato.occupato else { return }
+        if prova {
+            stato.apriProva(password: password)
+            return
+        }
+        guard cartella != nil || Deposito.c_e else { return }
+        stato.apri(sorgente: cartella ?? Portachiavi.cartella(), password: password, scritta: true)
+    }
+}
+
+struct TastoApri: View {
+    let fino: Date?
+    let spento: Bool
+    let azione: () -> Void
+    @State private var inizio = Date()
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 0.1)) { orologio in
+            let resta = fino.map { max(0, $0.timeIntervalSince(orologio.date)) } ?? 0
+            let totale = max(fino.map { $0.timeIntervalSince(inizio) } ?? 1, 0.1)
+            Button(action: azione) {
+                Text(resta > 0 ? "Apri · \(Int(resta.rounded(.up)))" : "Apri")
+                    .monospacedDigit()
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(alignment: .leading) {
+                        GeometryReader { g in
+                            Rectangle().fill(.white.opacity(0.18))
+                                .frame(width: resta > 0 ? g.size.width * (1 - resta / totale) : 0)
+                        }
+                    }
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(spento || resta > 0)
+        }
+        .onChange(of: fino) { _, _ in inizio = Date() }
     }
 }
 

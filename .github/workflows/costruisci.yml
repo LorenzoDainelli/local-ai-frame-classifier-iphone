@@ -13,6 +13,11 @@ jobs:
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
+      - name: Pacchetto di prova e icona
+        run: |
+          python3 -m venv /tmp/py
+          /tmp/py/bin/pip install --quiet pillow
+          /tmp/py/bin/python strumenti/prepara.py
       - name: Prove di VisoreKit
         run: swift test --package-path VisoreKit
       - name: Progetto
@@ -23,7 +28,8 @@ jobs:
         run: |
           xcodebuild -project Visore.xcodeproj -scheme Visore -configuration Release \
             -sdk iphoneos -destination 'generic/platform=iOS' \
-            -derivedDataPath costruito CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO build
+            -derivedDataPath costruito CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
+            MARKETING_VERSION=3.0.${{ github.run_number }} CURRENT_PROJECT_VERSION=${{ github.run_number }} build
           mkdir -p Payload
           cp -R costruito/Build/Products/Release-iphoneos/Visore.app Payload/
           zip -qry Visore.ipa Payload
@@ -31,10 +37,19 @@ jobs:
         with:
           name: Visore
           path: Visore.ipa
+      - name: Sorgente per AltStore
+        run: |
+          VERSIONE=$(/usr/libexec/PlistBuddy -c "Print CFBundleShortVersionString" Payload/Visore.app/Info.plist)
+          NUMERO=$(/usr/libexec/PlistBuddy -c "Print CFBundleVersion" Payload/Visore.app/Info.plist)
+          MINIMO=$(/usr/libexec/PlistBuddy -c "Print MinimumOSVersion" Payload/Visore.app/Info.plist)
+          /tmp/py/bin/python strumenti/fai_sorgente.py "$VERSIONE" "$NUMERO" "$MINIMO" Visore.ipa \
+            "https://github.com/${{ github.repository }}" > sorgente.json
+          cat sorgente.json
       - name: Rilascio
         if: github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release delete ultima --yes --cleanup-tag || true
-          gh release create ultima Visore.ipa --title "Visore" --notes "Da installare con SideStore o AltStore dal PC Windows."
+          gh release create ultima Visore.ipa sorgente.json Visore/Assets.xcassets/AppIcon.appiconset/icona.png \
+            --title "Visore" --notes "Si installa e si aggiorna con AltStore. In AltStore: Sorgenti, +, e l'indirizzo di sorgente.json qui sotto."
