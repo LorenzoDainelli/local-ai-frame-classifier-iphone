@@ -285,6 +285,7 @@ struct Galleria: View {
     let pacchetto: Pacchetto
     @State private var cerca = ""
     @State private var riassunto: [String: Giorno] = [:]
+    @State private var impostazioni = false
 
     var body: some View {
         NavigationStack {
@@ -306,8 +307,14 @@ struct Galleria: View {
             .navigationTitle("Foto")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                NavigationLink("Albero") { Albero(pacchetto: pacchetto, genitore: nil) }
+                ToolbarItem(placement: .topBarLeading) {
+                    Button { impostazioni = true } label: { Image(systemName: "gearshape") }
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    NavigationLink("Albero") { Albero(pacchetto: pacchetto, genitore: nil) }
+                }
             }
+            .sheet(isPresented: $impostazioni) { Impostazioni() }
             .searchable(text: $cerca)
             .onAppear {
                 if riassunto.isEmpty {

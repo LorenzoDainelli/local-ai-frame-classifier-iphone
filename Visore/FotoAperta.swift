@@ -38,6 +38,7 @@ struct FotoAperta: View {
     let pacchetto: Pacchetto
     @ObservedObject var elenco: Elenco
     let inizio: Int
+    @Binding var visto: Int64
     @Environment(\.dismiss) private var chiudi
     @State private var corrente: Int64?
     @State private var movimentoAcceso = false
@@ -96,7 +97,10 @@ struct FotoAperta: View {
         .onAppear {
             if elenco.scatti.indices.contains(inizio) { corrente = elenco.scatti[inizio].id }
         }
-        .onChange(of: corrente) { _, nuovo in prepara(intorno: nuovo) }
+        .onChange(of: corrente) { _, nuovo in
+            if let nuovo { visto = nuovo }
+            prepara(intorno: nuovo)
+        }
         .sheet(item: $info) { s in
             Informazioni(scatto: s)
                 .presentationDetents([.fraction(0.45)])
