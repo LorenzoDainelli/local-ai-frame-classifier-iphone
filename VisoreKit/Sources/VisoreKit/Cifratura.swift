@@ -116,6 +116,10 @@ public struct Chiave {
         }
     }
 
+    func apriBlocco(_ cifrato: Data, nonce: Data, aad: Data) throws -> Data {
+        try apri(cifrato, nonce: nonce, aad: aad)
+    }
+
     private func apri(_ cifrato: Data, nonce: Data, aad: Data) throws -> Data {
         guard cifrato.count >= Chiave.sigillo else { throw ErroreVisore.fileRovinato }
         do {

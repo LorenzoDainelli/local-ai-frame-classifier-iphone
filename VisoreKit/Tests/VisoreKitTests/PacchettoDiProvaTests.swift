@@ -34,8 +34,16 @@ final class PacchettoDiProvaTests: XCTestCase {
             }
         }
         XCTAssertEqual(Set(nomi), Set(a["nodi"] as! [String]))
+        let giorni = try p.archivio.giorni()
+        let giorniAttesi = a["giorni"] as! [[String: Any]]
+        XCTAssertEqual(giorni.map(\.giorno), giorniAttesi.map { $0["giorno"] as? String })
+        XCTAssertEqual(giorni.map(\.quanti), giorniAttesi.map { $0["quanti"] as! Int })
+        XCTAssertEqual(giorni.map { Set($0.luoghi) }, giorniAttesi.map { Set($0["luoghi"] as! [String]) })
+        XCTAssertEqual(giorni.map(\.quanti).reduce(0, +), scatti.count)
         for s in scatti {
             XCTAssertFalse(try p.apri(s.posto).isEmpty)
+            let lettore = try p.lettore(s.posto)
+            XCTAssertEqual(try lettore.leggi(da: 0, quanti: lettore.dimensione), try p.apri(s.posto))
         }
     }
 

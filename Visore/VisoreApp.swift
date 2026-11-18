@@ -192,6 +192,8 @@ final class StatoVisore: ObservableObject {
 
     func chiudi() {
         pacchetto = nil
+        Miniature.tutte.sfuma()
+        Originali.tutti.sfuma()
         faceIDDaChiedere = true
     }
 }
@@ -281,64 +283,38 @@ struct TastoApri: View {
 
 struct Galleria: View {
     let pacchetto: Pacchetto
-    @State private var scatti: [Scatto] = []
     @State private var cerca = ""
-    @State private var finiti = false
-    private static let pagina = 300
+    @State private var riassunto: [String: Giorno] = [:]
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 100), spacing: 2)], spacing: 2) {
-                    ForEach(scatti) { s in
-                        NavigationLink { Dettaglio(pacchetto: pacchetto, scatto: s) } label: {
-                            Miniatura(pacchetto: pacchetto, posto: s.mini ?? s.posto)
-                        }
-                        .onAppear { if s.id == scatti.last?.id { altri() } }
-                    }
+            Group {
+                if cerca.trimmingCharacters(in: .whitespaces).isEmpty {
+                    GrigliaGiorni(pacchetto: pacchetto,
+                                  elenco: Elenco { [pacchetto] quanti, dopo in
+                                      (try? pacchetto.archivio.scatti(limite: quanti, dopo: dopo)) ?? []
+                                  },
+                                  riassunto: riassunto)
+                } else {
+                    GrigliaGiorni(pacchetto: pacchetto,
+                                  elenco: Elenco { [pacchetto, cerca] quanti, dopo in
+                                      dopo == 0 ? ((try? pacchetto.archivio.cerca(cerca, limite: 5000)) ?? []) : []
+                                  })
+                        .id(cerca)
                 }
             }
-            .navigationTitle("\(pacchetto.carta.quantiScatti) scatti")
+            .navigationTitle("Foto")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 NavigationLink("Albero") { Albero(pacchetto: pacchetto, genitore: nil) }
             }
             .searchable(text: $cerca)
-            .onChange(of: cerca) { _, nuovo in carica(nuovo) }
-            .onAppear { carica("") }
-        }
-    }
-
-    private func carica(_ testo: String) {
-        if testo.isEmpty {
-            scatti = (try? pacchetto.archivio.scatti(limite: Galleria.pagina)) ?? []
-            finiti = scatti.count < Galleria.pagina
-        } else {
-            scatti = (try? pacchetto.archivio.cerca(testo)) ?? []
-            finiti = true
-        }
-    }
-
-    private func altri() {
-        guard !finiti, cerca.isEmpty else { return }
-        let nuovi = (try? pacchetto.archivio.scatti(limite: Galleria.pagina, dopo: scatti.count)) ?? []
-        finiti = nuovi.count < Galleria.pagina
-        scatti += nuovi
-    }
-}
-
-struct Miniatura: View {
-    let pacchetto: Pacchetto
-    let posto: String
-    @State private var immagine: UIImage?
-
-    var body: some View {
-        Color.secondary.opacity(0.15)
-            .aspectRatio(1, contentMode: .fit)
-            .overlay { if let immagine { Image(uiImage: immagine).resizable().scaledToFill() } }
-            .clipped()
-            .task(id: posto) {
-                let p = pacchetto, dove = posto
-                immagine = await Task.detached { (try? p.apri(dove)).flatMap(UIImage.init(data:)) }.value
+            .onAppear {
+                if riassunto.isEmpty {
+                    let giorni = (try? pacchetto.archivio.giorni()) ?? []
+                    riassunto = Dictionary(giorni.compactMap { g in g.giorno.map { ($0, g) } }, uniquingKeysWith: { a, _ in a })
+                }
             }
+        }
     }
 }

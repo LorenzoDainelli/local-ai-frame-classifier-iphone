@@ -27,12 +27,9 @@ public final class Pacchetto {
         return try chiave.decifra(Data(contentsOf: cartella.appendingPathComponent(posto)), posto: posto)
     }
 
-    public func apriInUnFile(_ posto: String, estensione: String) throws -> URL {
+    public func lettore(_ posto: String) throws -> LettoreCifrato {
         guard Pacchetto.postoSicuro(posto) else { throw ErroreVisore.fileEstraneo }
-        let dove = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-            .appendingPathExtension(estensione)
-        try chiave.decifraFile(da: cartella.appendingPathComponent(posto), a: dove, posto: posto)
-        return dove
+        return try LettoreCifrato(chiave: chiave, url: cartella.appendingPathComponent(posto), posto: posto)
     }
 
     static func postoSicuro(_ posto: String) -> Bool {
