@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   ipa:
-    runs-on: macos-15
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
       - name: Pacchetto di prova e icona
