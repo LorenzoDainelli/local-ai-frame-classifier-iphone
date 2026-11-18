@@ -4,6 +4,10 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      pubblica:
+        description: "si = la versione arriva in AltStore (fine tappa)"
+        default: "no"
 
 permissions:
   contents: write
@@ -46,7 +50,7 @@ jobs:
             "https://github.com/${{ github.repository }}" > sorgente.json
           cat sorgente.json
       - name: Rilascio
-        if: github.ref == 'refs/heads/main'
+        if: github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch' && inputs.pubblica == 'si'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
