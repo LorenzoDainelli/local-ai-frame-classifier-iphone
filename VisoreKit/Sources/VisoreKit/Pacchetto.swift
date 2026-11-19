@@ -32,6 +32,10 @@ public final class Pacchetto {
         return try LettoreCifrato(chiave: chiave, url: cartella.appendingPathComponent(posto), posto: posto)
     }
 
+    public func ritorno(in dove: URL) throws -> Ritorno {
+        try Ritorno(dove: dove, chiave: chiave, scorta: archivio.scorta())
+    }
+
     static func postoSicuro(_ posto: String) -> Bool {
         let pezzi = posto.split(separator: "/", omittingEmptySubsequences: false)
         guard let primo = pezzi.first, ["foto", "mini", "volti"].contains(primo), pezzi.count <= 3 else { return false }

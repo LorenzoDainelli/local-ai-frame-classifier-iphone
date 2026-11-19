@@ -14,6 +14,7 @@ public struct Scatto: Identifiable, Hashable {
     public let nota: String?
     public let dataLocale: String?
     public let luogo: String?
+    public let impronta: String
 
     public var live: Bool { genere == "live" && postoMovimento != nil }
     public var video: Bool { genere == "video" }
@@ -84,9 +85,12 @@ public struct Filtro: Hashable {
     public var anno: String?
     public var genere: String?
     public var vecchiePrima: Bool
+    public var impronte: [String]?
 
     public init(parole: [String] = [], persone: [Int64] = [], nodo: Int64? = nil, soloQui: Bool = false,
-                luogo: Int64? = nil, anno: String? = nil, genere: String? = nil, vecchiePrima: Bool = false) {
+                luogo: Int64? = nil, anno: String? = nil, genere: String? = nil, vecchiePrima: Bool = false,
+                impronte: [String]? = nil) {
+        self.impronte = impronte
         self.parole = parole
         self.persone = persone
         self.nodo = nodo
@@ -104,13 +108,14 @@ public struct Filtro: Hashable {
 
     public var vuoto: Bool {
         parole.isEmpty && persone.isEmpty && nodo == nil && luogo == nil && anno == nil && genere == nil
+            && impronte == nil
     }
 }
 
 public final class Archivio {
 
     private var db: OpaquePointer?
-    private let campiScatto = "s.id, s.genere, s.giorno, s.posto, s.posto_movimento, s.mini, s.larghezza, s.altezza, s.durata_ms, s.nota, s.data_locale, l.nome"
+    private let campiScatto = "s.id, s.genere, s.giorno, s.posto, s.posto_movimento, s.mini, s.larghezza, s.altezza, s.durata_ms, s.nota, s.data_locale, l.nome, s.impronta"
     private let daScatti = "FROM scatti s LEFT JOIN luoghi l ON l.id = s.luogo_id"
 
     public init(percorso: URL) throws {
@@ -206,6 +211,11 @@ public final class Archivio {
             parti.append("s.genere = ?")
             legami.append(g)
         }
+        if let i = f.impronte {
+            let elenco = (try? JSONSerialization.data(withJSONObject: i)).flatMap { String(data: $0, encoding: .utf8) }
+            parti.append("s.impronta IN (SELECT value FROM json_each(?))")
+            legami.append(elenco ?? "[]")
+        }
         for p in f.parole {
             let dentro = "%" + simile(p) + "%"
             var una = "s.id IN (SELECT scatto_id FROM parole WHERE parola = ?) OR s.nota LIKE ? ESCAPE '\\' "
@@ -224,7 +234,7 @@ public final class Archivio {
         Scatto(id: r.intero(0)!, genere: r.testo(1)!, giorno: r.testo(2), posto: r.testo(3)!,
                postoMovimento: r.testo(4), mini: r.testo(5), larghezza: r.intero(6).map(Int.init),
                altezza: r.intero(7).map(Int.init), durataMs: r.intero(8).map(Int.init), nota: r.testo(9),
-               dataLocale: r.testo(10), luogo: r.testo(11))
+               dataLocale: r.testo(10), luogo: r.testo(11), impronta: r.testo(12) ?? "")
     }
 
     public func giorni(filtro: Filtro = Filtro()) throws -> [Giorno] {
@@ -352,6 +362,24 @@ public final class Archivio {
     public func informazioni() -> [String: String] {
         let coppie = (try? righe("SELECT chiave, valore FROM informazioni", []) { ($0.testo(0) ?? "", $0.testo(1) ?? "") }) ?? []
         return Dictionary(coppie, uniquingKeysWith: { a, _ in a })
+    }
+
+    public func scorta() -> Scorta {
+        let cuori = (try? righe("SELECT impronta, messo_il FROM cuori ORDER BY impronta", []) {
+            Cuore(impronta: $0.testo(0) ?? "", messoIl: $0.testo(1))
+        }) ?? []
+        let tolti = (try? righe("SELECT impronta, tolto_il FROM cuori_tolti ORDER BY impronta", []) {
+            Cuore(impronta: $0.testo(0) ?? "", messoIl: $0.testo(1))
+        }) ?? []
+        let teste = (try? righe("SELECT id, nome, creata_il FROM raccolte ORDER BY id", []) {
+            ($0.intero(0) ?? 0, $0.testo(1) ?? "", $0.testo(2))
+        }) ?? []
+        let raccolte = teste.map { t in
+            Raccolta(numero: t.0, nome: t.1, creataIl: t.2,
+                     impronte: (try? righe("SELECT impronta FROM raccolte_scatti WHERE raccolta_id = ? ORDER BY impronta",
+                                           [t.0]) { $0.testo(0) ?? "" }) ?? [])
+        }
+        return Scorta(cuori: cuori, tolti: tolti, raccolte: raccolte)
     }
 
     public func cerca(_ testo: String, limite: Int = 200) throws -> [Scatto] {

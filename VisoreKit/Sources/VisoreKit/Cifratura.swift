@@ -1,5 +1,6 @@
 import CryptoKit
 import Foundation
+import Security
 
 public enum ErroreVisore: Error, Equatable {
     case parametriStrani
@@ -114,6 +115,41 @@ public struct Chiave {
             try? FileManager.default.removeItem(at: parziale)
             throw error
         }
+    }
+
+    public func cifra(_ dati: Data, posto: String) throws -> Data {
+        var prefisso = Data(count: 8)
+        let esito = prefisso.withUnsafeMutableBytes { SecRandomCopyBytes(kSecRandomDefault, 8, $0.baseAddress!) }
+        guard esito == errSecSuccess else { throw ErroreVisore.parametriStrani }
+        return try cifra(dati, posto: posto, prefisso: prefisso)
+    }
+
+    func cifra(_ dati: Data, posto: String, prefisso: Data) throws -> Data {
+        guard prefisso.count == 8 else { throw ErroreVisore.parametriStrani }
+        let esa = prefisso.map { String(format: "%02x", $0) }.joined()
+        let testa = Data(("{\"blocco\": \(Chiave.blocco), \"cifra\": \"AES-256-GCM\", \"dimensione\": \(dati.count), "
+            + "\"prefisso\": \"\(esa)\", \"versione\": \(Chiave.versioneLetta)}").utf8)
+        var uscita = Chiave.firma + Chiave.grande(testa.count, 2) + testa
+        uscita.reserveCapacity(uscita.count + dati.count + 64)
+        var numero = 0
+        var inizio = 0
+        while true {
+            let fine = min(inizio + Chiave.blocco, dati.count)
+            let ultimo = inizio + Chiave.blocco >= dati.count
+            let aad = Chiave.accompagnamento(numero, ultimo, dati.count, Chiave.versioneLetta, posto)
+            let pezzo = dati.subdata(in: (dati.startIndex + inizio)..<(dati.startIndex + fine))
+            do {
+                let chiusa = try AES.GCM.seal(pezzo, using: chiave, nonce: AES.GCM.Nonce(data: Chiave.nonce(prefisso, numero)),
+                                              authenticating: aad)
+                uscita += chiusa.ciphertext + chiusa.tag
+            } catch {
+                throw ErroreVisore.parametriStrani
+            }
+            if ultimo { break }
+            inizio += Chiave.blocco
+            numero += 1
+        }
+        return uscita
     }
 
     func apriBlocco(_ cifrato: Data, nonce: Data, aad: Data) throws -> Data {
