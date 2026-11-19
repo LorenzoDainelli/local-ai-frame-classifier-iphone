@@ -1,20 +1,42 @@
 import Foundation
 
 enum Deposito {
-    static var interna: URL {
-        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        return base.appendingPathComponent("Pacchetto", isDirectory: true)
+    static var documenti: URL {
+        FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
     }
 
+    static var interna: URL { documenti.appendingPathComponent("Pacchetto", isDirectory: true) }
+
+    static var arrivo: URL {
+        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("Pacchetto.in-arrivo", isDirectory: true)
+    }
+
+    static var cartellaRitorno: URL { documenti.appendingPathComponent("Ritorno", isDirectory: true) }
+
     static func ritorno(prova: Bool) -> URL {
-        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("Ritorno", isDirectory: true)
-        try? FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
+        prepara()
+        return cartellaRitorno.appendingPathComponent(prova ? "prova.db" : "ritorno.db")
+    }
+
+    static func prepara() {
+        let fm = FileManager.default
+        let vecchia = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("Pacchetto", isDirectory: true)
+        if fm.fileExists(atPath: vecchia.path), !fm.fileExists(atPath: interna.path) {
+            try? fm.moveItem(at: vecchia, to: interna)
+        }
+        for cartella in [interna, cartellaRitorno] {
+            try? fm.createDirectory(at: cartella, withIntermediateDirectories: true)
+            fuoriDalBackup(cartella)
+        }
+    }
+
+    static func fuoriDalBackup(_ cartella: URL) {
         var valori = URLResourceValues()
         valori.isExcludedFromBackup = true
-        var dove = base
+        var dove = cartella
         try? dove.setResourceValues(valori)
-        return base.appendingPathComponent(prova ? "prova.db" : "ritorno.db")
     }
 
     static var c_e: Bool {
@@ -29,9 +51,8 @@ enum Deposito {
 
     static func importa(da sorgente: URL) throws -> URL {
         let fm = FileManager.default
-        let base = interna.deletingLastPathComponent()
-        try fm.createDirectory(at: base, withIntermediateDirectories: true)
-        let nuova = base.appendingPathComponent("Pacchetto.in-arrivo", isDirectory: true)
+        let nuova = arrivo
+        try fm.createDirectory(at: nuova.deletingLastPathComponent(), withIntermediateDirectories: true)
         try? fm.removeItem(at: nuova)
         var errore: NSError?
         var fallito: Error?
@@ -52,10 +73,7 @@ enum Deposito {
         } else {
             try fm.moveItem(at: nuova, to: interna)
         }
-        var valori = URLResourceValues()
-        valori.isExcludedFromBackup = true
-        var dove = interna
-        try? dove.setResourceValues(valori)
+        fuoriDalBackup(interna)
         try? fm.setAttributes([.protectionKey: FileProtectionType.complete], ofItemAtPath: interna.path)
     }
 

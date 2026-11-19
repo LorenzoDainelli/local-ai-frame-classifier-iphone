@@ -117,7 +117,10 @@ struct FotoAperta: View {
             if elenco.scatti.indices.contains(inizio) { corrente = elenco.scatti[inizio].id }
         }
         .onChange(of: corrente) { _, nuovo in
-            if let nuovo { visto = nuovo }
+            if let nuovo {
+                visto = nuovo
+                cassetto.vista(nuovo)
+            }
             prepara(intorno: nuovo)
         }
         .sheet(item: $info) { s in

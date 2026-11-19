@@ -15,6 +15,8 @@ targets:
       - path: Prova
         type: folder
         buildPhase: resources
+      - path: PrivacyInfo.xcprivacy
+        buildPhase: resources
     dependencies:
       - package: VisoreKit
     info:
@@ -26,6 +28,8 @@ targets:
         UIUserInterfaceStyle: Dark
         UILaunchScreen: {}
         NSFaceIDUsageDescription: Face ID apre l'archivio senza riscrivere la password.
+        NSLocationWhenInUseUsageDescription: "Solo per il diario: dove e quando guardi l'archivio. Resta cifrato sull'iPhone e torna solo al tuo PC, col cavo."
+        UIFileSharingEnabled: true
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
     settings:
       base:

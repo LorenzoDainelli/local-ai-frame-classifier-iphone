@@ -9,6 +9,8 @@ final class Cassetto: ObservableObject {
     @Published private(set) var versione = 0
     @Published var guaio: String?
     @Published var aperta = false
+    @Published private(set) var diarioDal: String?
+    private(set) var viste: Set<Int64> = []
     private let ritorno: Ritorno?
 
     static let nonSalvato = "Non riesco a salvare sull'iPhone: forse è pieno. Quello che avevi già messo da parte è al sicuro."
@@ -61,6 +63,19 @@ final class Cassetto: ObservableObject {
         fai { try $0.butta(numero) }
     }
 
+    func vista(_ id: Int64) {
+        viste.insert(id)
+    }
+
+    func apertura(_ apertoIl: String, durataS: Int64, latitudine: Double?, longitudine: Double?) {
+        let quante = Int64(viste.count)
+        viste = []
+        guard let ritorno else { return }
+        try? ritorno.apertura(apertoIl, durataS: durataS, latitudine: latitudine, longitudine: longitudine,
+                              quanteFoto: quante)
+        diarioDal = ritorno.diarioDal()
+    }
+
     @discardableResult
     private func fai(_ azione: (Ritorno) throws -> Void) -> Bool {
         guard let ritorno else {
@@ -84,6 +99,7 @@ final class Cassetto: ObservableObject {
     private func rileggi() {
         cuori = ritorno?.cuori() ?? []
         raccolte = ritorno?.raccolte() ?? []
+        diarioDal = ritorno?.diarioDal()
         versione += 1
     }
 }

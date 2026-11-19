@@ -137,6 +137,14 @@ public final class Ritorno {
         }
     }
 
+    public func diarioDal() -> String? {
+        (try? righe("SELECT min(aperto_il) FROM diario", []) { $0.testo(0) })?.first ?? nil
+    }
+
+    public func aperture() -> Int {
+        Int((try? righe("SELECT count(*) FROM diario", []) { $0.intero(0) ?? 0 })?.first ?? 0)
+    }
+
     public func raccolta(_ numero: Int64) -> Raccolta? {
         raccolte().first { $0.numero == numero }
     }

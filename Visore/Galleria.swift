@@ -617,11 +617,20 @@ struct Anteprima: View {
 struct Impostazioni: View {
     let pacchetto: Pacchetto
     @AppStorage("visore.proporzioni") private var proporzioni = false
+    @EnvironmentObject var cassetto: Cassetto
     @Environment(\.dismiss) private var chiudi
 
     var body: some View {
         NavigationStack {
             Form {
+                Section("Firma") {
+                    if let scade = Firma.scadenza() {
+                        Text(Firma.aParole(fino: scade)).font(.headline)
+                    }
+                    Text("Rinnovare la firma con AltStore non tocca niente. Cancellare l'app e rimetterla porta via "
+                         + "il pacchetto: andrebbe ricopiato tutto dal PC.")
+                        .font(.callout)
+                }
                 Section {
                     Toggle("Proporzioni vere", isOn: $proporzioni)
                 } header: {
@@ -633,6 +642,20 @@ struct Impostazioni: View {
                     Text("Il Visore si chiude appena esci o cambi app, e al rientro chiede Face ID. "
                          + "La password torna ogni 7 giorni, dopo un riavvio e dopo 5 Face ID falliti.")
                         .font(.callout)
+                }
+                Section("Riservatezza") {
+                    Text("Le foto non compaiono negli screenshot, nelle registrazioni dello schermo e sullo schermo "
+                         + "duplicato; se qualcosa registra, il Visore si copre. È una difesa parziale: una seconda "
+                         + "fotocamera la supera.")
+                        .font(.callout)
+                    Text("Il Visore non usa internet, non manda notifiche e non accetta le tastiere di altre app. "
+                         + "Chiede un solo permesso: la posizione mentre è aperto, per il diario.")
+                        .font(.callout)
+                    if let dal = cassetto.diarioDal {
+                        LabeledContent("Diario dal", value: Testi.giorno(String(dal.prefix(10))))
+                    } else {
+                        LabeledContent("Diario", value: "ancora vuoto")
+                    }
                 }
                 Section("Live photo") {
                     Text("Tocca la foto: si muove una volta. Appoggia il dito e scendi piano: si muove finché tieni; "

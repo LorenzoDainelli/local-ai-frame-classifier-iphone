@@ -146,6 +146,8 @@ final class RitornoTests: XCTestCase {
         XCTAssertEqual(letto["raccolte"], [[String(numero), "Mare 2025", "2025-04-01T00:00:00Z"]])
         XCTAssertEqual(letto["raccolte_scatti"], [[String(numero), a], [String(numero), c]])
         XCTAssertEqual(letto["diario"], [["2025-06-01T10:00:00Z", "42", "3"]])
+        XCTAssertEqual(r.diarioDal(), "2025-06-01T10:00:00Z")
+        XCTAssertEqual(r.aperture(), 1)
         let riaperto = try Ritorno(dove: dove, chiave: k, scorta: Scorta(cuori: [Cuore(impronta: c, messoIl: nil)]))
         XCTAssertEqual(riaperto.cuori(), [a])
         XCTAssertEqual(riaperto.raccolte().map(\.nome), ["Mare 2025"])

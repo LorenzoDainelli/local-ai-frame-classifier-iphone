@@ -4,7 +4,10 @@ import VisoreKit
 
 @main
 struct VisoreApp: App {
+    @UIApplicationDelegateAdaptor(Delegato.self) private var delegato
     @StateObject private var stato = StatoVisore()
+    @StateObject private var cattura = Cattura()
+    @StateObject private var diario = Diario()
     @Environment(\.scenePhase) private var fase
 
     init() { StatoVisore.pulisciGliAvanzi() }
@@ -20,11 +23,28 @@ struct VisoreApp: App {
                 }
             }
             .overlay { if fase != .active && stato.pacchetto != nil { Copertura() } }
+            .overlay { if cattura.inCorso { CoperturaCattura() } }
             .environmentObject(stato)
             .preferredColorScheme(.dark)
+            .onAppear {
+                Deposito.prepara()
+                Scudo.copriTutto()
+                cattura.segui()
+                cattura.guarda()
+            }
+            .onChange(of: stato.pacchetto != nil) { _, aperto in
+                if aperto { diario.inizia() }
+            }
             .onChange(of: fase) { _, nuova in
-                if nuova == .background { stato.chiudi() }
-                if nuova == .active { stato.rientro() }
+                if nuova == .background {
+                    diario.finisci(in: stato.cassetto)
+                    stato.chiudi()
+                }
+                if nuova == .active {
+                    Scudo.copriTutto()
+                    cattura.guarda()
+                    stato.rientro()
+                }
             }
         }
     }
@@ -85,7 +105,7 @@ final class StatoVisore: ObservableObject {
         for file in dentro where ["db", "mov"].contains(file.pathExtension) {
             try? FileManager.default.removeItem(at: file)
         }
-        Deposito.scarta(Deposito.interna.deletingLastPathComponent().appendingPathComponent("Pacchetto.in-arrivo"))
+        Deposito.scarta(Deposito.arrivo)
     }
 
     func apri(sorgente: URL?, password: String, scritta: Bool) {
@@ -217,6 +237,9 @@ struct Sblocco: View {
     var body: some View {
         VStack(spacing: 20) {
             Text("Visore").font(.largeTitle.bold())
+            if let scade = Firma.scadenza() {
+                Text(Firma.aParole(fino: scade)).font(.footnote).foregroundStyle(.secondary)
+            }
             if prova {
                 Text("Prova con 5 foto finte. La password è: tre parole che ricordi")
                     .foregroundStyle(.secondary).multilineTextAlignment(.center)
@@ -300,6 +323,16 @@ struct Galleria: View {
             Tab("Foto", systemImage: "photo.on.rectangle") {
                 NavigationStack {
                     GrigliaGiorni(pacchetto: pacchetto)
+                        .safeAreaInset(edge: .top) {
+                            if let scade = Firma.scadenza(), Firma.giorni(fino: scade) <= 2 {
+                                Text(Firma.aParole(fino: scade) + " Collega l'iPhone ad AltStore sul fisso.")
+                                    .font(.footnote.weight(.semibold))
+                                    .frame(maxWidth: .infinity)
+                                    .padding(8)
+                                    .background(.orange.opacity(0.85))
+                                    .foregroundStyle(.black)
+                            }
+                        }
                         .navigationTitle("Foto")
                         .navigationBarTitleDisplayMode(.inline)
                         .toolbar {
@@ -325,7 +358,7 @@ struct Galleria: View {
                 NavigationStack { Cerca(pacchetto: pacchetto).destinazioni(pacchetto) }
             }
         }
-        .sheet(isPresented: $impostazioni) { Impostazioni(pacchetto: pacchetto) }
+        .sheet(isPresented: $impostazioni) { Impostazioni(pacchetto: pacchetto).environmentObject(cassetto) }
         .alert("Attenzione", isPresented: Binding(get: { cassetto.guaio != nil }, set: { if !$0 { cassetto.guaio = nil } })) {
             Button("OK") { cassetto.guaio = nil }
         } message: {
