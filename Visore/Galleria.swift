@@ -523,8 +523,10 @@ struct Impostazioni: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Griglia") {
+                Section {
                     Toggle("Proporzioni vere", isOn: $proporzioni)
+                } header: {
+                    Text("Griglia")
                 } footer: {
                     Text("Spento: miniature quadrate, piene. Acceso: ogni foto con la sua forma, dentro il suo quadrato.")
                 }
