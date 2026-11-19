@@ -23,7 +23,7 @@ jobs:
           /tmp/py/bin/pip install --quiet pillow
           /tmp/py/bin/python strumenti/prepara.py
       - name: Prove di VisoreKit
-        run: swift test --package-path VisoreKit
+        run: swift test -c release -Xswiftc -enable-testing --package-path VisoreKit
       - name: Progetto
         run: |
           brew install xcodegen

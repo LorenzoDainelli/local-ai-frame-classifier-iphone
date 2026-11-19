@@ -301,6 +301,7 @@ struct BarraAnni: View {
     let vai: (Int) -> Void
     @State private var dito: CGFloat?
     @State private var ultimo: Int?
+    @State private var mese: String?
 
     var body: some View {
         GeometryReader { g in
@@ -315,7 +316,7 @@ struct BarraAnni: View {
                             .fixedSize()
                             .offset(x: -30, y: min(alto - 14, a.frazione * alto))
                     }
-                    if let i = linea.indice(a: dito / alto) {
+                    if let i = linea.indice(a: dito / alto), linea.giorni.indices.contains(i) {
                         Text(Testi.mese(linea.giorni[i]))
                             .font(.footnote.weight(.semibold))
                             .fixedSize()
@@ -334,14 +335,16 @@ struct BarraAnni: View {
                     dito = min(alto, max(0, v.location.y))
                     if let i = linea.indice(a: v.location.y / alto), i != ultimo {
                         ultimo = i
+                        mese = String(linea.giorni[i].prefix(7))
                         vai(i)
                     }
                 }
                 .onEnded { _ in
                     dito = nil
                     ultimo = nil
+                    mese = nil
                 })
-            .sensoryFeedback(.selection, trigger: ultimo.map { linea.giorni[$0].prefix(7) })
+            .sensoryFeedback(.selection, trigger: mese)
         }
         .frame(width: 26)
         .animation(.easeOut(duration: 0.15), value: dito == nil)
@@ -438,6 +441,7 @@ struct Anteprima: View {
     let scatto: Scatto
     @State private var immagine: UIImage?
     @State private var originale = false
+    @StateObject private var movimento = Movimento()
 
     var body: some View {
         ZStack {
@@ -447,25 +451,37 @@ struct Anteprima: View {
                     .resizable()
                     .allowedDynamicRange(originale ? .high : .standard)
                     .scaledToFit()
+                    .overlay {
+                        if scatto.live || scatto.video {
+                            StratoVideo(lettore: movimento.lettore)
+                                .opacity(movimento.inCorso ? 1 : 0)
+                        }
+                    }
                     .clipShape(RoundedRectangle(cornerRadius: 14))
                     .shadow(radius: 20)
                     .padding(24)
             }
         }
         .allowsHitTesting(false)
+        .onDisappear { movimento.chiudi() }
         .task(id: scatto.id) {
             let mini = scatto.mini ?? scatto.posto
             immagine = Miniature.tutte.pronta(mini)
-            guard !scatto.video else {
+            if scatto.video {
                 if immagine == nil { immagine = await Miniature.tutte.carica(pacchetto, mini, lato: 600) }
-                return
+                await movimento.prepara(pacchetto: pacchetto, posto: scatto.posto)
+            } else {
+                if let grande = await Originali.tutti.carica(pacchetto, scatto.posto) {
+                    immagine = grande
+                    originale = true
+                } else if immagine == nil {
+                    immagine = await Miniature.tutte.carica(pacchetto, mini, lato: 600)
+                }
+                if scatto.live, let m = scatto.postoMovimento {
+                    await movimento.prepara(pacchetto: pacchetto, posto: m)
+                }
             }
-            if let grande = await Originali.tutti.carica(pacchetto, scatto.posto) {
-                immagine = grande
-                originale = true
-            } else if immagine == nil {
-                immagine = await Miniature.tutte.carica(pacchetto, mini, lato: 600)
-            }
+            if !Task.isCancelled, movimento.pronto { movimento.inAnello() }
         }
     }
 }
