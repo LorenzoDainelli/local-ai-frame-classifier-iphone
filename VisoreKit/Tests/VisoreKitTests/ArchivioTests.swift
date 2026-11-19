@@ -11,8 +11,9 @@ final class ArchivioTests: XCTestCase {
         var db: OpaquePointer?
         XCTAssertEqual(sqlite3_open(dove.path, &db), SQLITE_OK)
         let sql = """
-        CREATE TABLE persone (id INTEGER PRIMARY KEY, nome TEXT NOT NULL, volto TEXT, quanti INTEGER NOT NULL);
-        INSERT INTO persone VALUES (1, 'Anna', NULL, 3), (2, 'Bruno', 'volti/ab/cd', 7);
+        CREATE TABLE persone (id INTEGER PRIMARY KEY, nome TEXT NOT NULL, volto TEXT, quanti INTEGER NOT NULL DEFAULT 0,
+          dal_giorno TEXT, al_giorno TEXT);
+        INSERT INTO persone VALUES (1, 'Anna', NULL, 3, NULL, NULL), (2, 'Bruno', 'volti/ab/cd', 7, '2019-01-01', '2020-02-02');
         """
         XCTAssertEqual(sqlite3_exec(db, sql, nil, nil, nil), SQLITE_OK)
         sqlite3_close(db)
