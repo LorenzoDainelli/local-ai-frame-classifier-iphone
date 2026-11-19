@@ -66,6 +66,30 @@ enum Testi {
             .capitalized(with: Locale(identifier: "it_IT"))
     }
 
+    static func numero(_ n: Int) -> String {
+        n.formatted(.number.locale(Locale(identifier: "it_IT")))
+    }
+
+    static func foto(_ n: Int) -> String {
+        n == 1 ? "1 foto" : "\(numero(n)) foto"
+    }
+
+    static func periodo(_ dal: String?, _ al: String?) -> String? {
+        let a = dal.map { String($0.prefix(4)) }
+        let b = al.map { String($0.prefix(4)) }
+        switch (a, b) {
+        case let (a?, b?): return a == b ? a : "\(a)–\(b)"
+        case let (a?, nil): return a
+        case let (nil, b?): return b
+        default: return nil
+        }
+    }
+
+    static func istante(_ testo: String) -> String {
+        guard let data = ISO8601DateFormatter().date(from: testo) else { return testo }
+        return data.formatted(Date.FormatStyle(date: .long, time: .shortened).locale(Locale(identifier: "it_IT")))
+    }
+
     static func ora(_ testo: String?) -> String? {
         guard let testo, testo.count >= 16 else { return nil }
         let i = testo.index(testo.startIndex, offsetBy: 11)
@@ -93,12 +117,19 @@ final class Elenco: ObservableObject {
     @Published private(set) var scatti: [Scatto] = []
     @Published private(set) var finiti = false
     let pagina = 600
+    let giorni: [Giorno]
+    let perGiorno: [String: Giorno]
     private let prendi: (Int, Int) -> [Scatto]
 
-    init(prendi: @escaping (Int, Int) -> [Scatto]) {
-        self.prendi = prendi
+    init(archivio: Archivio, filtro: Filtro) {
+        prendi = { quanti, dopo in (try? archivio.scatti(filtro: filtro, limite: quanti, dopo: dopo)) ?? [] }
+        let giorni = (try? archivio.giorni(filtro: filtro)) ?? []
+        self.giorni = giorni
+        perGiorno = Dictionary(giorni.compactMap { g in g.giorno.map { ($0, g) } }, uniquingKeysWith: { a, _ in a })
         altri()
     }
+
+    var totale: Int { giorni.reduce(0) { $0 + $1.quanti } }
 
     func altri() {
         guard !finiti else { return }
@@ -126,6 +157,8 @@ final class Elenco: ObservableObject {
         }
         return uscita
     }
+
+    var linea: Linea { Linea(giorni.compactMap { g in g.giorno.map { ($0, g.quanti) } }) }
 }
 
 struct Linea {
@@ -178,8 +211,9 @@ struct Linea {
 
 struct GrigliaGiorni: View {
     let pacchetto: Pacchetto
+    let testa: AnyView?
+    let vuota: String
     @StateObject private var elenco: Elenco
-    let riassunto: [String: Giorno]
     @AppStorage("visore.colonne") private var colonne = 3
     @AppStorage("visore.proporzioni") private var proporzioni = false
     @State private var aperto: Aperto?
@@ -195,19 +229,23 @@ struct GrigliaGiorni: View {
 
     private static let livelli = [1, 3, 5, 7]
 
-    init(pacchetto: Pacchetto, elenco: @autoclosure @escaping () -> Elenco, riassunto: [String: Giorno] = [:]) {
+    init(pacchetto: Pacchetto, filtro: Filtro = Filtro(), testa: AnyView? = nil,
+         vuota: String = "Qui non ci sono foto.") {
         self.pacchetto = pacchetto
-        self.riassunto = riassunto
-        _elenco = StateObject(wrappedValue: elenco())
+        self.testa = testa
+        self.vuota = vuota
+        _elenco = StateObject(wrappedValue: Elenco(archivio: pacchetto.archivio, filtro: filtro))
     }
 
     var body: some View {
         GeometryReader { g in
             let lato = (g.size.width - CGFloat(colonne - 1) * 2) / CGFloat(colonne)
             let gruppi = elenco.gruppi
+            let linea = elenco.linea
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 0) {
+                        if let testa { testa }
                         ForEach(gruppi) { gruppo in
                             Intestazione(giorno: gruppo.giorno, luoghi: luoghi(gruppo))
                                 .id("giorno-" + gruppo.id)
@@ -224,7 +262,7 @@ struct GrigliaGiorni: View {
                             }
                         }
                         if elenco.scatti.isEmpty {
-                            Text("Qui non ci sono foto.").foregroundStyle(.secondary).padding()
+                            Text(vuota).foregroundStyle(.secondary).padding()
                         }
                     }
                 }
@@ -238,7 +276,7 @@ struct GrigliaGiorni: View {
                         }
                     })
                 .overlay(alignment: .trailing) {
-                    BarraAnni(linea: linea(gruppi)) { i in vai(i, linea(gruppi), proxy) }
+                    BarraAnni(linea: linea) { i in vai(i, linea, proxy) }
                 }
                 .onChange(of: visto) { _, id in
                     if aperto != nil { proxy.scrollTo(id, anchor: .center) }
@@ -259,24 +297,15 @@ struct GrigliaGiorni: View {
         .sensoryFeedback(.impact(weight: .medium), trigger: anteprima?.id) { _, nuovo in nuovo != nil }
     }
 
-    private func linea(_ gruppi: [GruppoDelGiorno]) -> Linea {
-        if !riassunto.isEmpty {
-            return Linea(riassunto.values.compactMap { r in r.giorno.map { ($0, r.quanti) } }
-                .sorted { $0.0 > $1.0 })
-        }
-        return Linea(gruppi.compactMap { gr in gr.giorno.map { ($0, gr.scatti.count) } })
-    }
-
     private func vai(_ i: Int, _ linea: Linea, _ proxy: ScrollViewProxy) {
+        guard linea.giorni.indices.contains(i) else { return }
         let giorno = linea.giorni[i]
-        if !riassunto.isEmpty {
-            elenco.almeno(linea.prima[i] + (riassunto[giorno]?.quanti ?? 1))
-        }
+        elenco.almeno(linea.prima[i] + (elenco.perGiorno[giorno]?.quanti ?? 1))
         proxy.scrollTo("giorno-" + giorno, anchor: .top)
     }
 
     private func luoghi(_ gruppo: GruppoDelGiorno) -> [String] {
-        if let g = gruppo.giorno, let r = riassunto[g] { return r.luoghi }
+        if let g = gruppo.giorno, let r = elenco.perGiorno[g] { return r.luoghi }
         var visti: [String: Int] = [:]
         for s in gruppo.scatti { if let l = s.luogo { visti[l, default: 0] += 1 } }
         return visti.sorted { $0.value != $1.value ? $0.value > $1.value : $0.key < $1.key }.map(\.key)
@@ -487,16 +516,43 @@ struct Anteprima: View {
 }
 
 struct Impostazioni: View {
+    let pacchetto: Pacchetto
     @AppStorage("visore.proporzioni") private var proporzioni = false
     @Environment(\.dismiss) private var chiudi
 
     var body: some View {
         NavigationStack {
             Form {
-                Section {
+                Section("Griglia") {
                     Toggle("Proporzioni vere", isOn: $proporzioni)
                 } footer: {
                     Text("Spento: miniature quadrate, piene. Acceso: ogni foto con la sua forma, dentro il suo quadrato.")
+                }
+                Section("Blocco") {
+                    Text("Il Visore si chiude appena esci o cambi app, e al rientro chiede Face ID. "
+                         + "La password torna ogni 7 giorni, dopo un riavvio e dopo 5 Face ID falliti.")
+                        .font(.callout)
+                }
+                Section("Live photo") {
+                    Text("Tocca la foto: si muove una volta. Appoggia il dito e scendi piano: si muove finché tieni; "
+                         + "oltre un tratto resta accesa anche sulle foto dopo. Tocca di nuovo per spegnerla. "
+                         + "Giù di scatto chiude, su mostra i comandi e le informazioni.")
+                        .font(.callout)
+                }
+                Section("Pacchetto") {
+                    let info = pacchetto.archivio.informazioni()
+                    LabeledContent("Foto e video", value: Testi.numero((try? pacchetto.archivio.quanti()) ?? 0))
+                    if let fatto = info["fatto_il"] { LabeledContent("Fatto il", value: Testi.istante(fatto)) }
+                    if let n = info["nuove_ultimo_travaso"], let quante = Int(n), quante > 0 {
+                        LabeledContent("Nuove nell'ultima copia", value: Testi.numero(quante))
+                    }
+                    if let v = info["versione_officina"] { LabeledContent("Officina", value: v) }
+                    LabeledContent("Visore", value: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "")
+                }
+                Section("Licenze") {
+                    Text("SQLite: pubblico dominio. Crittografia: CryptoKit di Apple, compresa nel sistema. "
+                         + "Il resto del Visore è scritto per questo progetto e non usa librerie di altri.")
+                        .font(.callout)
                 }
             }
             .navigationTitle("Impostazioni")

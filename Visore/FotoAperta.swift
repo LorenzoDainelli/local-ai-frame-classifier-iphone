@@ -102,8 +102,7 @@ struct FotoAperta: View {
             prepara(intorno: nuovo)
         }
         .sheet(item: $info) { s in
-            Informazioni(scatto: s)
-                .presentationDetents([.fraction(0.45)])
+            Informazioni(pacchetto: pacchetto, scatto: s)
                 .presentationDragIndicator(.visible)
         }
     }
@@ -364,18 +363,67 @@ struct ComandiVideo: View {
 }
 
 struct Informazioni: View {
+    let pacchetto: Pacchetto
     let scatto: Scatto
+    @State private var dettagli: Dettagli?
+    @State private var strada = NavigationPath()
+    @State private var altezza: PresentationDetent = .fraction(0.45)
 
     var body: some View {
-        List {
-            Section {
-                LabeledContent("Giorno", value: Testi.giorno(scatto.giorno))
-                if let ora = Testi.ora(scatto.dataLocale) { LabeledContent("Ora", value: ora) }
-                if let luogo = scatto.luogo { LabeledContent("Luogo", value: luogo) }
+        NavigationStack(path: $strada) {
+            List {
+                Section {
+                    LabeledContent("Giorno", value: Testi.giorno(scatto.giorno))
+                    if let ora = Testi.ora(scatto.dataLocale) { LabeledContent("Ora", value: ora) }
+                    if let luogo = scatto.luogo { LabeledContent("Luogo", value: luogo) }
+                }
+                if let persone = dettagli?.persone, !persone.isEmpty {
+                    Section("Persone") {
+                        ScrollView(.horizontal) {
+                            HStack(spacing: 8) {
+                                ForEach(persone) { p in
+                                    NavigationLink(value: p) {
+                                        HStack(spacing: 6) {
+                                            Volto(pacchetto: pacchetto, persona: p, lato: 26)
+                                            Text(p.nome).lineLimit(1)
+                                        }
+                                        .padding(.leading, 4).padding(.trailing, 12).padding(.vertical, 4)
+                                        .background(Color(white: 0.2), in: Capsule())
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
+                        }
+                        .scrollIndicators(.hidden)
+                    }
+                }
+                if let nodi = dettagli?.nodi, !nodi.isEmpty {
+                    Section("Nodi") {
+                        ScrollView(.horizontal) {
+                            HStack(spacing: 8) {
+                                ForEach(nodi) { n in
+                                    NavigationLink(value: n) {
+                                        Text(n.nome).lineLimit(1)
+                                            .padding(.horizontal, 12).padding(.vertical, 7)
+                                            .background(Color(white: 0.2), in: Capsule())
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
+                        }
+                        .scrollIndicators(.hidden)
+                    }
+                }
+                if let nota = scatto.nota, !nota.isEmpty {
+                    Section("Nota") { Text(nota) }
+                }
             }
-            if let nota = scatto.nota, !nota.isEmpty {
-                Section("Nota") { Text(nota) }
-            }
+            .navigationTitle("Informazioni")
+            .navigationBarTitleDisplayMode(.inline)
+            .destinazioni(pacchetto)
         }
+        .presentationDetents([.fraction(0.45), .large], selection: $altezza)
+        .onChange(of: strada.count) { _, n in withAnimation { altezza = n > 0 ? .large : .fraction(0.45) } }
+        .task(id: scatto.id) { dettagli = try? pacchetto.archivio.dettagli(scatto.id) }
     }
 }

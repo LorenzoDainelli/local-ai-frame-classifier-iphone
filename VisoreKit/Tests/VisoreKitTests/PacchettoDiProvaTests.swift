@@ -47,6 +47,26 @@ final class PacchettoDiProvaTests: XCTestCase {
         }
     }
 
+    func testRicercaEDettagliDiconoQuelloCheDiceIlPc() throws {
+        let p = try Pacchetto(cartella: cartella, password: "tre parole che ricordi")
+        let a = try atteso()
+        let dettagli = a["dettagli"] as! [String: Any]
+        let d = try p.archivio.dettagli(Int64(dettagli["id"] as! Int))
+        XCTAssertEqual(d.nodi.map(\.nome), (dettagli["nodi"] as! [[Any]]).map { $0[0] as! String })
+        XCTAssertEqual(d.persone.map(\.nome), dettagli["persone"] as! [String])
+        for chiave in ["cerca", "cerca_anno"] {
+            let c = a[chiave] as! [String: Any]
+            let t = try p.archivio.trovati(c["testo"] as! String)
+            XCTAssertEqual(t.persone.map(\.nome), c["persone"] as! [String])
+            XCTAssertEqual(t.nodi.map(\.nome), c["nodi"] as! [String])
+            XCTAssertEqual(t.anni.map { [$0.anno, String($0.quanti)] },
+                           (c["date"] as! [[Any]]).map { ["\($0[0])", "\($0[1])"] })
+        }
+        XCTAssertFalse(p.archivio.ciSonoParole())
+        XCTAssertEqual(try p.archivio.insieme(a: 1).map(\.persona.nome), ["Bruno"])
+        XCTAssertEqual(try p.archivio.persone().map(\.nome).sorted(), ["Ada", "Bruno"])
+    }
+
     func testLaPasswordSbagliataNonApreIlPacchettoDelPc() {
         XCTAssertThrowsError(try Pacchetto(cartella: cartella, password: "tre parole che ricordo")) {
             XCTAssertEqual($0 as? ErroreVisore, .passwordSbagliata)

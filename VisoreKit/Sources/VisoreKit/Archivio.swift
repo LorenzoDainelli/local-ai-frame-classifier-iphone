@@ -1,7 +1,7 @@
 import Foundation
 import SQLite3
 
-public struct Scatto: Identifiable, Equatable {
+public struct Scatto: Identifiable, Hashable {
     public let id: Int64
     public let genere: String
     public let giorno: String?
@@ -26,7 +26,7 @@ public struct Giorno: Identifiable, Equatable {
     public let luoghi: [String]
 }
 
-public struct Nodo: Identifiable, Equatable {
+public struct Nodo: Identifiable, Hashable {
     public let id: Int64
     public let genitoreId: Int64?
     public let nome: String
@@ -34,11 +34,77 @@ public struct Nodo: Identifiable, Equatable {
     public let quantiColRamo: Int
 }
 
-public struct Persona: Identifiable, Equatable {
+public struct Persona: Identifiable, Hashable {
     public let id: Int64
     public let nome: String
     public let volto: String?
     public let quanti: Int
+    public let dal: String?
+    public let al: String?
+}
+
+public struct Compagno: Identifiable, Hashable {
+    public var id: Int64 { persona.id }
+    public let persona: Persona
+    public let quante: Int
+}
+
+public struct Luogo: Identifiable, Hashable {
+    public let id: Int64
+    public let nome: String
+    public let quanti: Int
+}
+
+public struct Anno: Identifiable, Hashable {
+    public var id: String { anno }
+    public let anno: String
+    public let quanti: Int
+}
+
+public struct Dettagli: Equatable {
+    public let nodi: [Nodo]
+    public let persone: [Persona]
+}
+
+public struct Trovati: Equatable {
+    public let persone: [Persona]
+    public let nodi: [Nodo]
+    public let luoghi: [Luogo]
+    public let anni: [Anno]
+
+    public var vuoto: Bool { persone.isEmpty && nodi.isEmpty && luoghi.isEmpty && anni.isEmpty }
+}
+
+public struct Filtro: Hashable {
+    public var parole: [String]
+    public var persone: [Int64]
+    public var nodo: Int64?
+    public var soloQui: Bool
+    public var luogo: Int64?
+    public var anno: String?
+    public var genere: String?
+    public var vecchiePrima: Bool
+
+    public init(parole: [String] = [], persone: [Int64] = [], nodo: Int64? = nil, soloQui: Bool = false,
+                luogo: Int64? = nil, anno: String? = nil, genere: String? = nil, vecchiePrima: Bool = false) {
+        self.parole = parole
+        self.persone = persone
+        self.nodo = nodo
+        self.soloQui = soloQui
+        self.luogo = luogo
+        self.anno = anno
+        self.genere = genere
+        self.vecchiePrima = vecchiePrima
+    }
+
+    public static func parole(di testo: String) -> [String] {
+        var viste = Set<String>()
+        return testo.lowercased().split(whereSeparator: \.isWhitespace).map(String.init).filter { viste.insert($0).inserted }
+    }
+
+    public var vuoto: Bool {
+        parole.isEmpty && persone.isEmpty && nodo == nil && luogo == nil && anno == nil && genere == nil
+    }
 }
 
 public final class Archivio {
@@ -78,28 +144,80 @@ public final class Archivio {
 
     public func scatti(nodo: Int64? = nil, persona: Int64? = nil, soloQui: Bool = false,
                        limite: Int = 500, dopo: Int = 0) throws -> [Scatto] {
-        var dove = ""
-        var legami: [Int64] = []
-        if let nodo {
-            if soloQui {
-                dove = "WHERE s.id IN (SELECT scatto_id FROM etichette WHERE nodo_id = ?)"
-            } else {
-                dove = """
-                WHERE s.id IN (SELECT scatto_id FROM etichette WHERE nodo_id IN (
-                  WITH RECURSIVE ramo(id) AS (SELECT ? UNION SELECT n.id FROM nodi n JOIN ramo r ON n.genitore_id = r.id)
-                  SELECT id FROM ramo))
-                """
-            }
-            legami.append(nodo)
-        }
-        if let persona {
-            dove += (dove.isEmpty ? "WHERE " : " AND ") + "s.id IN (SELECT scatto_id FROM persone_negli_scatti WHERE persona_id = ?)"
-            legami.append(persona)
-        }
-        let sql = "SELECT \(campiScatto) \(daScatti) \(dove) ORDER BY s.giorno IS NULL, s.giorno DESC, s.istante_utc DESC, s.id LIMIT ? OFFSET ?"
+        try scatti(filtro: Filtro(persone: persona.map { [$0] } ?? [], nodo: nodo, soloQui: soloQui),
+                   limite: limite, dopo: dopo)
+    }
+
+    public func scatti(filtro: Filtro, limite: Int = 500, dopo: Int = 0) throws -> [Scatto] {
+        let (dove, legami) = Archivio.condizioni(filtro)
+        let sql = "SELECT \(campiScatto) \(daScatti) \(dove) ORDER BY \(Archivio.ordine(filtro)) LIMIT ? OFFSET ?"
         return try righe(sql, legami + [Int64(limite), Int64(dopo)]) { r in
             Archivio.scatto(r)
         }
+    }
+
+    public func quanti(filtro: Filtro = Filtro()) throws -> Int {
+        let (dove, legami) = Archivio.condizioni(filtro)
+        return try righe("SELECT count(*) FROM scatti s \(dove)", legami) { Int($0.intero(0) ?? 0) }.first ?? 0
+    }
+
+    static func ordine(_ f: Filtro) -> String {
+        f.vecchiePrima ? "s.giorno IS NULL, s.giorno ASC, s.istante_utc ASC, s.id"
+                       : "s.giorno IS NULL, s.giorno DESC, s.istante_utc DESC, s.id"
+    }
+
+    static func simile(_ testo: String) -> String {
+        testo.replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "%", with: "\\%").replacingOccurrences(of: "_", with: "\\_")
+    }
+
+    static func annoScritto(_ parola: String) -> Bool {
+        parola.count == 4 && parola.allSatisfy { $0.isASCII && $0.isNumber }
+    }
+
+    static func condizioni(_ f: Filtro) -> (String, [Any]) {
+        var parti: [String] = []
+        var legami: [Any] = []
+        if let nodo = f.nodo {
+            if f.soloQui {
+                parti.append("s.id IN (SELECT scatto_id FROM etichette WHERE nodo_id = ?)")
+            } else {
+                parti.append("""
+                s.id IN (SELECT scatto_id FROM etichette WHERE nodo_id IN (
+                  WITH RECURSIVE ramo(id) AS (SELECT ? UNION SELECT n.id FROM nodi n JOIN ramo r ON n.genitore_id = r.id)
+                  SELECT id FROM ramo))
+                """)
+            }
+            legami.append(nodo)
+        }
+        for p in f.persone {
+            parti.append("s.id IN (SELECT scatto_id FROM persone_negli_scatti WHERE persona_id = ?)")
+            legami.append(p)
+        }
+        if let l = f.luogo {
+            parti.append("s.luogo_id = ?")
+            legami.append(l)
+        }
+        if let a = f.anno {
+            parti.append("s.giorno LIKE ?")
+            legami.append(a + "-%")
+        }
+        if let g = f.genere {
+            parti.append("s.genere = ?")
+            legami.append(g)
+        }
+        for p in f.parole {
+            let dentro = "%" + simile(p) + "%"
+            var una = "s.id IN (SELECT scatto_id FROM parole WHERE parola = ?) OR s.nota LIKE ? ESCAPE '\\' "
+                + "OR s.id IN (SELECT e.scatto_id FROM etichette e JOIN nodi n ON n.id = e.nodo_id WHERE n.nome LIKE ? ESCAPE '\\')"
+            legami += [p, dentro, dentro]
+            if annoScritto(p) {
+                una += " OR s.giorno LIKE ?"
+                legami.append(p + "-%")
+            }
+            parti.append("(" + una + ")")
+        }
+        return (parti.isEmpty ? "" : "WHERE " + parti.joined(separator: " AND "), legami)
     }
 
     static func scatto(_ r: Riga) -> Scatto {
@@ -109,13 +227,15 @@ public final class Archivio {
                dataLocale: r.testo(10), luogo: r.testo(11))
     }
 
-    public func giorni() throws -> [Giorno] {
+    public func giorni(filtro: Filtro = Filtro()) throws -> [Giorno] {
+        let (dove, legami) = Archivio.condizioni(filtro)
+        let verso = filtro.vecchiePrima ? "ASC" : "DESC"
         let sql = """
         SELECT s.giorno, count(*), group_concat(l.nome, char(31))
-        FROM scatti s LEFT JOIN luoghi l ON l.id = s.luogo_id
-        GROUP BY s.giorno ORDER BY s.giorno IS NULL, s.giorno DESC
+        FROM scatti s LEFT JOIN luoghi l ON l.id = s.luogo_id \(dove)
+        GROUP BY s.giorno ORDER BY s.giorno IS NULL, s.giorno \(verso)
         """
-        return try righe(sql, []) { r in
+        return try righe(sql, legami) { r in
             var visti: [String: Int] = [:]
             for nome in (r.testo(2) ?? "").split(separator: "\u{1F}").map(String.init) where !nome.isEmpty {
                 visti[nome, default: 0] += 1
@@ -125,39 +245,119 @@ public final class Archivio {
         }
     }
 
+    private let campiNodo = "id, genitore_id, nome, quanti, quanti_col_ramo"
+    private let campiPersona = "p.id, p.nome, p.volto, p.quanti, p.dal_giorno, p.al_giorno"
+
+    static func nodo(_ r: Riga) -> Nodo {
+        Nodo(id: r.intero(0)!, genitoreId: r.intero(1), nome: r.testo(2)!,
+             quanti: Int(r.intero(3)!), quantiColRamo: Int(r.intero(4)!))
+    }
+
+    static func persona(_ r: Riga) -> Persona {
+        Persona(id: r.intero(0)!, nome: r.testo(1)!, volto: r.testo(2), quanti: Int(r.intero(3)!),
+                dal: r.testo(4), al: r.testo(5))
+    }
+
     public func nodi(figliDi genitore: Int64?) throws -> [Nodo] {
         let sql = genitore == nil
-            ? "SELECT id, genitore_id, nome, quanti, quanti_col_ramo FROM nodi WHERE genitore_id IS NULL ORDER BY posizione, id"
-            : "SELECT id, genitore_id, nome, quanti, quanti_col_ramo FROM nodi WHERE genitore_id = ? ORDER BY posizione, id"
-        return try righe(sql, genitore.map { [$0] } ?? []) { r in
-            Nodo(id: r.intero(0)!, genitoreId: r.intero(1), nome: r.testo(2)!,
-                 quanti: Int(r.intero(3)!), quantiColRamo: Int(r.intero(4)!))
-        }
+            ? "SELECT \(campiNodo) FROM nodi WHERE genitore_id IS NULL AND quanti_col_ramo > 0 ORDER BY posizione, id"
+            : "SELECT \(campiNodo) FROM nodi WHERE genitore_id = ? AND quanti_col_ramo > 0 ORDER BY posizione, id"
+        return try righe(sql, genitore.map { [$0] } ?? [], Archivio.nodo)
+    }
+
+    public func nodo(_ id: Int64) throws -> Nodo? {
+        try righe("SELECT \(campiNodo) FROM nodi WHERE id = ?", [id], Archivio.nodo).first
+    }
+
+    public func copertina(nodo: Int64) throws -> Scatto? {
+        try scatti(filtro: Filtro(nodo: nodo), limite: 1).first
     }
 
     public func persone() throws -> [Persona] {
-        try righe("SELECT id, nome, volto, quanti FROM persone ORDER BY quanti DESC, nome", []) { r in
-            Persona(id: r.intero(0)!, nome: r.testo(1)!, volto: r.testo(2), quanti: Int(r.intero(3)!))
+        try righe("SELECT \(campiPersona) FROM persone p WHERE p.quanti > 0 ORDER BY p.quanti DESC, p.nome, p.id", [],
+                  Archivio.persona)
+    }
+
+    public func persona(_ id: Int64) throws -> Persona? {
+        try righe("SELECT \(campiPersona) FROM persone p WHERE p.id = ?", [id], Archivio.persona).first
+    }
+
+    public func insieme(a persona: Int64) throws -> [Compagno] {
+        let sql = """
+        SELECT \(campiPersona), i.quante FROM insieme i JOIN persone p ON p.id = i.altra_id
+        WHERE i.persona_id = ? AND i.altra_id <> i.persona_id AND i.quante > 0 ORDER BY i.quante DESC, p.nome, p.id
+        """
+        return try righe(sql, [persona]) { r in
+            Compagno(persona: Archivio.persona(r), quante: Int(r.intero(6) ?? 0))
         }
     }
 
+    public func luoghi() throws -> [Luogo] {
+        let sql = """
+        SELECT l.id, l.nome, count(s.id) AS n FROM luoghi l JOIN scatti s ON s.luogo_id = l.id
+        WHERE l.nome IS NOT NULL AND l.nome <> '' GROUP BY l.id ORDER BY n DESC, l.nome
+        """
+        return try righe(sql, []) { r in Luogo(id: r.intero(0)!, nome: r.testo(1)!, quanti: Int(r.intero(2)!)) }
+    }
+
+    public func anni() throws -> [Anno] {
+        let sql = """
+        SELECT substr(giorno, 1, 4) AS a, count(*) FROM scatti WHERE giorno IS NOT NULL
+        GROUP BY a ORDER BY a DESC
+        """
+        return try righe(sql, []) { r in Anno(anno: r.testo(0)!, quanti: Int(r.intero(1)!)) }
+    }
+
+    public func dettagli(_ scatto: Int64) throws -> Dettagli {
+        let nodi = try righe("""
+            SELECT n.id, n.genitore_id, n.nome, n.quanti, n.quanti_col_ramo FROM etichette e
+            JOIN nodi n ON n.id = e.nodo_id WHERE e.scatto_id = ? ORDER BY n.posizione, n.id
+            """, [scatto], Archivio.nodo)
+        let persone = try righe("""
+            SELECT \(campiPersona) FROM persone_negli_scatti x JOIN persone p ON p.id = x.persona_id
+            WHERE x.scatto_id = ? ORDER BY p.quanti DESC, p.nome, p.id
+            """, [scatto], Archivio.persona)
+        return Dettagli(nodi: nodi, persone: persone)
+    }
+
+    public func trovati(_ testo: String) throws -> Trovati {
+        let scritto = testo.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !scritto.isEmpty else { return Trovati(persone: [], nodi: [], luoghi: [], anni: []) }
+        let inizio = Archivio.simile(scritto) + "%"
+        let parola = "% " + inizio
+        let persone = try righe("""
+            SELECT \(campiPersona) FROM persone p WHERE p.quanti > 0
+            AND (p.nome LIKE ? ESCAPE '\\' OR p.nome LIKE ? ESCAPE '\\') ORDER BY p.quanti DESC, p.nome LIMIT 20
+            """, [inizio, parola], Archivio.persona)
+        let nodi = try righe("""
+            SELECT \(campiNodo) FROM nodi WHERE quanti_col_ramo > 0
+            AND (nome LIKE ? ESCAPE '\\' OR nome LIKE ? ESCAPE '\\') ORDER BY quanti_col_ramo DESC, nome LIMIT 20
+            """, [inizio, parola], Archivio.nodo)
+        let luoghi = try righe("""
+            SELECT l.id, l.nome, count(s.id) AS n FROM luoghi l JOIN scatti s ON s.luogo_id = l.id
+            WHERE l.nome LIKE ? ESCAPE '\\' OR l.nome LIKE ? ESCAPE '\\' GROUP BY l.id ORDER BY n DESC, l.nome LIMIT 20
+            """, [inizio, parola]) { r in Luogo(id: r.intero(0)!, nome: r.testo(1)!, quanti: Int(r.intero(2)!)) }
+        var anni: [Anno] = []
+        if Archivio.annoScritto(scritto) {
+            let n = try quanti(filtro: Filtro(anno: scritto))
+            if n > 0 { anni = [Anno(anno: scritto, quanti: n)] }
+        }
+        return Trovati(persone: persone, nodi: nodi, luoghi: luoghi, anni: anni)
+    }
+
+    public func ciSonoParole() -> Bool {
+        ((try? righe("SELECT EXISTS (SELECT 1 FROM parole)", []) { $0.intero(0) ?? 0 })?.first ?? 0) == 1
+    }
+
+    public func informazioni() -> [String: String] {
+        let coppie = (try? righe("SELECT chiave, valore FROM informazioni", []) { ($0.testo(0) ?? "", $0.testo(1) ?? "") }) ?? []
+        return Dictionary(coppie, uniquingKeysWith: { a, _ in a })
+    }
+
     public func cerca(_ testo: String, limite: Int = 200) throws -> [Scatto] {
-        let parole = testo.lowercased().split(whereSeparator: \.isWhitespace).map(String.init)
+        let parole = Filtro.parole(di: testo)
         guard !parole.isEmpty else { return [] }
-        let condizioni = parole.map { _ in
-            "(s.id IN (SELECT scatto_id FROM parole WHERE parola = ?) OR s.nota LIKE ? ESCAPE '\\' "
-            + "OR s.id IN (SELECT e.scatto_id FROM etichette e JOIN nodi n ON n.id = e.nodo_id WHERE n.nome LIKE ? ESCAPE '\\'))"
-        }.joined(separator: " AND ")
-        var legami: [Any] = []
-        for p in parole {
-            let simile = "%" + p.replacingOccurrences(of: "\\", with: "\\\\")
-                .replacingOccurrences(of: "%", with: "\\%").replacingOccurrences(of: "_", with: "\\_") + "%"
-            legami += [p, simile, simile]
-        }
-        let sql = "SELECT \(campiScatto) \(daScatti) WHERE \(condizioni) ORDER BY s.giorno IS NULL, s.giorno DESC, s.istante_utc DESC, s.id LIMIT ?"
-        return try righe(sql, legami + [Int64(limite)]) { r in
-            Archivio.scatto(r)
-        }
+        return try scatti(filtro: Filtro(parole: parole), limite: limite)
     }
 
     struct Riga {

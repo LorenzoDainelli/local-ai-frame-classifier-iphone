@@ -283,45 +283,42 @@ struct TastoApri: View {
 
 struct Galleria: View {
     let pacchetto: Pacchetto
-    @State private var cerca = ""
-    @State private var riassunto: [String: Giorno] = [:]
     @State private var impostazioni = false
 
     var body: some View {
-        NavigationStack {
-            Group {
-                if cerca.trimmingCharacters(in: .whitespaces).isEmpty {
-                    GrigliaGiorni(pacchetto: pacchetto,
-                                  elenco: Elenco { [pacchetto] quanti, dopo in
-                                      (try? pacchetto.archivio.scatti(limite: quanti, dopo: dopo)) ?? []
-                                  },
-                                  riassunto: riassunto)
-                } else {
-                    GrigliaGiorni(pacchetto: pacchetto,
-                                  elenco: Elenco { [pacchetto, cerca] quanti, dopo in
-                                      dopo == 0 ? ((try? pacchetto.archivio.cerca(cerca, limite: 5000)) ?? []) : []
-                                  })
-                        .id(cerca)
+        TabView {
+            Tab("Foto", systemImage: "photo.on.rectangle") {
+                NavigationStack {
+                    GrigliaGiorni(pacchetto: pacchetto)
+                        .navigationTitle("Foto")
+                        .navigationBarTitleDisplayMode(.inline)
+                        .toolbar {
+                            ToolbarItem(placement: .topBarLeading) {
+                                Button { impostazioni = true } label: { Image(systemName: "gearshape") }
+                                    .accessibilityLabel("Impostazioni")
+                            }
+                        }
+                        .destinazioni(pacchetto)
                 }
             }
-            .navigationTitle("Foto")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button { impostazioni = true } label: { Image(systemName: "gearshape") }
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    NavigationLink("Albero") { Albero(pacchetto: pacchetto, genitore: nil) }
-                }
+            Tab("Nodi", systemImage: "square.stack") {
+                NavigationStack { Albero(pacchetto: pacchetto).destinazioni(pacchetto) }
             }
-            .sheet(isPresented: $impostazioni) { Impostazioni() }
-            .searchable(text: $cerca)
-            .onAppear {
-                if riassunto.isEmpty {
-                    let giorni = (try? pacchetto.archivio.giorni()) ?? []
-                    riassunto = Dictionary(giorni.compactMap { g in g.giorno.map { ($0, g) } }, uniquingKeysWith: { a, _ in a })
-                }
+            Tab("Persone", systemImage: "person.2") {
+                NavigationStack { Persone(pacchetto: pacchetto).destinazioni(pacchetto) }
+            }
+            Tab("Cerca", systemImage: "magnifyingglass") {
+                NavigationStack { Cerca(pacchetto: pacchetto).destinazioni(pacchetto) }
             }
         }
+        .sheet(isPresented: $impostazioni) { Impostazioni(pacchetto: pacchetto) }
+    }
+}
+
+extension View {
+    func destinazioni(_ pacchetto: Pacchetto) -> some View {
+        navigationDestination(for: Nodo.self) { NodoVista(pacchetto: pacchetto, nodo: $0) }
+            .navigationDestination(for: Persona.self) { PersonaVista(pacchetto: pacchetto, persona: $0) }
+            .navigationDestination(for: Coppia.self) { CoppiaVista(pacchetto: pacchetto, coppia: $0) }
     }
 }
