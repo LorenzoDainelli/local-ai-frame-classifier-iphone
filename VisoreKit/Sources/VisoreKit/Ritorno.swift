@@ -142,14 +142,26 @@ public final class Ritorno {
     }
 
     public func metti(_ impronta: String, quando: String = Ritorno.adesso()) throws {
+        try metti([impronta], quando: quando)
+    }
+
+    public func metti(_ impronte: [String], quando: String = Ritorno.adesso()) throws {
         try cambia {
-            try esegui("INSERT INTO cuori (impronta, messo_il) VALUES (?, ?) ON CONFLICT(impronta) DO NOTHING",
-                       [impronta, quando])
+            for i in impronte {
+                try esegui("INSERT INTO cuori (impronta, messo_il) VALUES (?, ?) ON CONFLICT(impronta) DO NOTHING",
+                           [i, quando])
+            }
         }
     }
 
     public func togli(_ impronta: String) throws {
-        try cambia { try esegui("DELETE FROM cuori WHERE impronta = ?", [impronta]) }
+        try togli([impronta])
+    }
+
+    public func togli(_ impronte: [String]) throws {
+        try cambia {
+            for i in impronte { try esegui("DELETE FROM cuori WHERE impronta = ?", [i]) }
+        }
     }
 
     @discardableResult
@@ -218,7 +230,9 @@ public final class Ritorno {
     private func cambia(_ fai: () throws -> Void) throws {
         let prima = try byte()
         do {
+            try esegui("BEGIN")
             try fai()
+            try esegui("COMMIT")
             try salva()
         } catch {
             sqlite3_close(db)

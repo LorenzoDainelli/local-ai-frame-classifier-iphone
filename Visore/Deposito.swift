@@ -6,6 +6,17 @@ enum Deposito {
         return base.appendingPathComponent("Pacchetto", isDirectory: true)
     }
 
+    static func ritorno(prova: Bool) -> URL {
+        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("Ritorno", isDirectory: true)
+        try? FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
+        var valori = URLResourceValues()
+        valori.isExcludedFromBackup = true
+        var dove = base
+        try? dove.setResourceValues(valori)
+        return base.appendingPathComponent(prova ? "prova.db" : "ritorno.db")
+    }
+
     static var c_e: Bool {
         FileManager.default.fileExists(atPath: interna.appendingPathComponent("visore.json").path)
     }

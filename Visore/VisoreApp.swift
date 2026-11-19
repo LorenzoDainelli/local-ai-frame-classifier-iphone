@@ -12,8 +12,9 @@ struct VisoreApp: App {
     var body: some Scene {
         WindowGroup {
             Group {
-                if let pacchetto = stato.pacchetto {
+                if let pacchetto = stato.pacchetto, let cassetto = stato.cassetto {
                     Galleria(pacchetto: pacchetto)
+                        .environmentObject(cassetto)
                 } else {
                     Sblocco()
                 }
@@ -70,6 +71,7 @@ enum Attesa {
 @MainActor
 final class StatoVisore: ObservableObject {
     @Published var pacchetto: Pacchetto?
+    @Published var cassetto: Cassetto?
     @Published var errore: String?
     @Published var avviso: String?
     @Published var occupato = false
@@ -125,6 +127,7 @@ final class StatoVisore: ObservableObject {
                     Attesa.giusta()
                     self.attesaFino = nil
                     self.avviso = nil
+                    self.cassetto = Cassetto(pacchetto: p, dove: Deposito.ritorno(prova: false))
                     self.pacchetto = p
                     self.occupato = false
                 }
@@ -150,7 +153,12 @@ final class StatoVisore: ObservableObject {
         Task.detached(priority: .userInitiated) {
             do {
                 let p = try Pacchetto(cartella: cartella, password: password)
-                await MainActor.run { self.avviso = nil; self.pacchetto = p; self.occupato = false }
+                await MainActor.run {
+                    self.avviso = nil
+                    self.cassetto = Cassetto(pacchetto: p, dove: Deposito.ritorno(prova: true))
+                    self.pacchetto = p
+                    self.occupato = false
+                }
             } catch {
                 await MainActor.run { self.errore = "La password della prova è: tre parole che ricordi"; self.occupato = false }
             }
@@ -192,6 +200,7 @@ final class StatoVisore: ObservableObject {
 
     func chiudi() {
         pacchetto = nil
+        cassetto = nil
         Miniature.tutte.sfuma()
         Originali.tutti.sfuma()
         faceIDDaChiedere = true
@@ -283,6 +292,7 @@ struct TastoApri: View {
 
 struct Galleria: View {
     let pacchetto: Pacchetto
+    @EnvironmentObject var cassetto: Cassetto
     @State private var impostazioni = false
 
     var body: some View {
@@ -296,6 +306,10 @@ struct Galleria: View {
                             ToolbarItem(placement: .topBarLeading) {
                                 Button { impostazioni = true } label: { Image(systemName: "gearshape") }
                                     .accessibilityLabel("Impostazioni")
+                            }
+                            ToolbarItem(placement: .topBarLeading) {
+                                NavigationLink(value: TutteLeRaccolte()) { Image(systemName: "heart.text.square") }
+                                    .accessibilityLabel("Preferiti e raccolte")
                             }
                         }
                         .destinazioni(pacchetto)
@@ -312,6 +326,11 @@ struct Galleria: View {
             }
         }
         .sheet(isPresented: $impostazioni) { Impostazioni(pacchetto: pacchetto) }
+        .alert("Attenzione", isPresented: Binding(get: { cassetto.guaio != nil }, set: { if !$0 { cassetto.guaio = nil } })) {
+            Button("OK") { cassetto.guaio = nil }
+        } message: {
+            Text(cassetto.guaio ?? "")
+        }
     }
 }
 
@@ -320,5 +339,7 @@ extension View {
         navigationDestination(for: Nodo.self) { NodoVista(pacchetto: pacchetto, nodo: $0) }
             .navigationDestination(for: Persona.self) { PersonaVista(pacchetto: pacchetto, persona: $0) }
             .navigationDestination(for: Coppia.self) { CoppiaVista(pacchetto: pacchetto, coppia: $0) }
+            .navigationDestination(for: TutteLeRaccolte.self) { _ in RaccolteVista(pacchetto: pacchetto) }
+            .navigationDestination(for: QualeRaccolta.self) { RaccoltaVista(pacchetto: pacchetto, quale: $0) }
     }
 }

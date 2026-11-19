@@ -213,7 +213,11 @@ struct GrigliaGiorni: View {
     let pacchetto: Pacchetto
     let testa: AnyView?
     let vuota: String
+    let raccolta: Int64?
+    @EnvironmentObject var cassetto: Cassetto
     @StateObject private var elenco: Elenco
+    @State private var scelti: Set<Int64>?
+    @State private var chiedeTogli = false
     @AppStorage("visore.colonne") private var colonne = 3
     @AppStorage("visore.proporzioni") private var proporzioni = false
     @State private var aperto: Aperto?
@@ -229,10 +233,11 @@ struct GrigliaGiorni: View {
 
     private static let livelli = [1, 3, 5, 7]
 
-    init(pacchetto: Pacchetto, filtro: Filtro = Filtro(), testa: AnyView? = nil,
+    init(pacchetto: Pacchetto, filtro: Filtro = Filtro(), testa: AnyView? = nil, raccolta: Int64? = nil,
          vuota: String = "Qui non ci sono foto.") {
         self.pacchetto = pacchetto
         self.testa = testa
+        self.raccolta = raccolta
         self.vuota = vuota
         _elenco = StateObject(wrappedValue: Elenco(archivio: pacchetto.archivio, filtro: filtro))
     }
@@ -247,16 +252,18 @@ struct GrigliaGiorni: View {
                     LazyVStack(alignment: .leading, spacing: 0) {
                         if let testa { testa }
                         ForEach(gruppi) { gruppo in
-                            Intestazione(giorno: gruppo.giorno, luoghi: luoghi(gruppo))
+                            Intestazione(giorno: gruppo.giorno, luoghi: luoghi(gruppo),
+                                         tutte: scelti == nil ? nil : tutteDelGiorno(gruppo, linea))
                                 .id("giorno-" + gruppo.id)
                             LazyVGrid(columns: Array(repeating: GridItem(.fixed(lato), spacing: 2), count: colonne),
                                       spacing: 2) {
                                 ForEach(gruppo.scatti) { s in
                                     Riquadro(pacchetto: pacchetto, scatto: s, lato: lato, proporzioni: proporzioni,
+                                             cuore: cassetto.haIlCuore(s), scelto: scelti.map { $0.contains(s.id) },
                                              tenuto: { anteprima = $0 ? s : (anteprima?.id == s.id ? nil : anteprima) })
                                         .matchedTransitionSource(id: s.id, in: zoom)
                                         .id(s.id)
-                                        .onTapGesture { apri(s) }
+                                        .onTapGesture { if scelti == nil { apri(s) } else { cambia(s.id) } }
                                         .onAppear { if s.id == elenco.scatti.last?.id { elenco.altri() } }
                                 }
                             }
@@ -282,7 +289,8 @@ struct GrigliaGiorni: View {
                     if aperto != nil { proxy.scrollTo(id, anchor: .center) }
                 }
                 .fullScreenCover(item: $aperto) { a in
-                    FotoAperta(pacchetto: pacchetto, elenco: elenco, inizio: a.indice, visto: $visto)
+                    FotoAperta(pacchetto: pacchetto, elenco: elenco, inizio: a.indice, visto: $visto, raccolta: raccolta)
+                        .environmentObject(cassetto)
                         .navigationTransition(.zoom(sourceID: visto, in: zoom))
                 }
             }
@@ -295,6 +303,72 @@ struct GrigliaGiorni: View {
         }
         .animation(.spring(duration: 0.25), value: anteprima?.id)
         .sensoryFeedback(.impact(weight: .medium), trigger: anteprima?.id) { _, nuovo in nuovo != nil }
+        .toolbar {
+            if !elenco.scatti.isEmpty {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(scelti == nil ? "Scegli" : "Annulla") {
+                        withAnimation(.snappy) { scelti = scelti == nil ? [] : nil }
+                    }
+                }
+            }
+        }
+        .toolbar(scelti == nil ? .automatic : .hidden, for: .tabBar)
+        .safeAreaInset(edge: .bottom) {
+            if let scelti {
+                BarraScelta(quante: scelti.count, tuttiColCuore: tuttiColCuore, raccolta: raccolta,
+                            impronte: { impronteScelte }, cuore: { acceso in
+                                if cassetto.cuore(impronteScelte, acceso: acceso) { finito() }
+                            }, togli: { chiedeTogli = true }, finito: finito)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .confirmationDialog("Togliere dalla raccolta?", isPresented: $chiedeTogli, titleVisibility: .visible) {
+            Button(impronteScelte.count == 1 ? "Togli 1 foto" : "Togli \(Testi.numero(impronteScelte.count)) foto",
+                   role: .destructive) {
+                if let raccolta, cassetto.togli(impronteScelte, da: raccolta) { finito() }
+            }
+        } message: {
+            Text("Le foto restano nell'archivio: escono solo da questa raccolta.")
+        }
+        .onChange(of: aperto?.id) { _, nuovo in cassetto.aperta = nuovo != nil }
+    }
+
+    private var impronteScelte: [String] {
+        guard let scelti else { return [] }
+        return elenco.scatti.filter { scelti.contains($0.id) }.map(\.impronta)
+    }
+
+    private var tuttiColCuore: Bool {
+        let i = impronteScelte
+        return !i.isEmpty && i.allSatisfy { cassetto.cuori.contains($0) }
+    }
+
+    private func finito() {
+        withAnimation(.snappy) { scelti = nil }
+    }
+
+    private func cambia(_ id: Int64) {
+        guard var s = scelti else { return }
+        if s.contains(id) { s.remove(id) } else { s.insert(id) }
+        scelti = s
+    }
+
+    private func tutteDelGiorno(_ gruppo: GruppoDelGiorno, _ linea: Linea) -> (Bool, () -> Void) {
+        let ids = Set(gruppo.scatti.map(\.id))
+        let completo = gruppo.giorno.flatMap { elenco.perGiorno[$0] }.map { $0.quanti <= ids.count } ?? true
+        let tutte = completo && ids.isSubset(of: scelti ?? [])
+        return (tutte, {
+            guard var s = scelti else { return }
+            if tutte {
+                s.subtract(ids)
+            } else {
+                if let g = gruppo.giorno, let i = linea.giorni.firstIndex(of: g) {
+                    elenco.almeno(linea.prima[i] + (elenco.perGiorno[g]?.quanti ?? 0))
+                }
+                for x in elenco.scatti where x.giorno == gruppo.giorno { s.insert(x.id) }
+            }
+            scelti = s
+        })
     }
 
     private func vai(_ i: Int, _ linea: Linea, _ proxy: ScrollViewProxy) {
@@ -383,12 +457,20 @@ struct BarraAnni: View {
 struct Intestazione: View {
     let giorno: String?
     let luoghi: [String]
+    var tutte: (Bool, () -> Void)? = nil
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(Testi.giorno(giorno)).font(.title3.bold())
-            if let l = Testi.luoghi(luoghi) {
-                Text(l).font(.footnote).foregroundStyle(.secondary).lineLimit(1)
+        HStack(alignment: .firstTextBaseline) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(Testi.giorno(giorno)).font(.title3.bold())
+                if let l = Testi.luoghi(luoghi) {
+                    Text(l).font(.footnote).foregroundStyle(.secondary).lineLimit(1)
+                }
+            }
+            Spacer(minLength: 8)
+            if let tutte {
+                Button(tutte.0 ? "Nessuna" : "Tutte", action: tutte.1)
+                    .font(.subheadline.weight(.semibold))
             }
         }
         .padding(.horizontal, 12)
@@ -413,6 +495,8 @@ struct Riquadro: View {
     let scatto: Scatto
     let lato: CGFloat
     let proporzioni: Bool
+    var cuore = false
+    var scelto: Bool? = nil
     let tenuto: (Bool) -> Void
     @State private var immagine: UIImage?
     @GestureState private var premuto = false
@@ -437,6 +521,21 @@ struct Riquadro: View {
                 Image(systemName: "livephoto")
                     .font(.caption2.weight(.semibold))
                     .foregroundStyle(.white).shadow(radius: 2).padding(4)
+            }
+            if cuore, lato > 40 {
+                Image(systemName: "heart.fill")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.white).shadow(radius: 2).padding(4)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+            }
+            if let scelto {
+                if scelto { Color.white.opacity(0.22) }
+                Image(systemName: scelto ? "checkmark.circle.fill" : "circle")
+                    .font(.title3)
+                    .symbolRenderingMode(scelto ? .palette : .monochrome)
+                    .foregroundStyle(.white, Color.accentColor)
+                    .shadow(radius: 2).padding(5)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
             }
         }
         .frame(width: lato, height: lato)
@@ -561,5 +660,42 @@ struct Impostazioni: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { Button("Fine") { chiudi() } }
         }
+    }
+}
+
+struct BarraScelta: View {
+    let quante: Int
+    let tuttiColCuore: Bool
+    let raccolta: Int64?
+    let impronte: () -> [String]
+    let cuore: (Bool) -> Void
+    let togli: () -> Void
+    let finito: () -> Void
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Button { cuore(!tuttiColCuore) } label: {
+                Image(systemName: tuttiColCuore ? "heart.slash" : "heart").font(.title3).padding(10)
+            }
+            .accessibilityLabel(tuttiColCuore ? "Togli il cuore" : "Metti il cuore")
+            Spacer()
+            Text(quante == 0 ? "Tocca le foto" : quante == 1 ? "1 scelta" : "\(Testi.numero(quante)) scelte")
+                .font(.subheadline.weight(.semibold)).monospacedDigit()
+            Spacer()
+            if raccolta != nil {
+                Button(role: .destructive, action: togli) {
+                    Image(systemName: "rectangle.stack.badge.minus").font(.title3).padding(10)
+                }
+                .accessibilityLabel("Togli dalla raccolta")
+            }
+            MenuRaccolta(impronte: impronte, fatto: finito) {
+                Image(systemName: "rectangle.stack.badge.plus").font(.title3).padding(10)
+            }
+            .accessibilityLabel("Aggiungi a una raccolta")
+        }
+        .disabled(quante == 0)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(.bar)
     }
 }

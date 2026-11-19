@@ -9,6 +9,13 @@ enum Gesti {
     static let chiudeVeloce: CGFloat = 900
     static let liveDopo: CGFloat = 70
     static let tocco: TimeInterval = 0.3
+    static let doppio: TimeInterval = 0.35
+    static let barra: CGFloat = 52
+
+    @MainActor static var sopraLaBarra: CGFloat {
+        let finestra = UIApplication.shared.connectedScenes.compactMap { ($0 as? UIWindowScene)?.keyWindow }.first
+        return barra + (finestra?.safeAreaInsets.bottom ?? 0)
+    }
 }
 
 final class Originali {
@@ -39,7 +46,10 @@ struct FotoAperta: View {
     @ObservedObject var elenco: Elenco
     let inizio: Int
     @Binding var visto: Int64
+    var raccolta: Int64? = nil
+    @EnvironmentObject var cassetto: Cassetto
     @Environment(\.dismiss) private var chiudi
+    @State private var colpi = 0
     @State private var corrente: Int64?
     @State private var movimentoAcceso = false
     @State private var controlli = false
@@ -56,7 +66,8 @@ struct FotoAperta: View {
                         Pagina(pacchetto: pacchetto, scatto: s, attiva: corrente == s.id,
                                movimentoAcceso: $movimentoAcceso, controlli: $controlli,
                                ingrandita: $ingrandita, giu: $giu,
-                               chiudi: { chiudi() }, mostraInfo: { info = s })
+                               chiudi: { chiudi() }, mostraInfo: { info = s },
+                               doppio: { doppioTocco(s) })
                             .containerRelativeFrame(.horizontal)
                             .id(s.id)
                             .onAppear { if s.id == elenco.scatti.last?.id { elenco.altri() } }
@@ -88,9 +99,17 @@ struct FotoAperta: View {
                     .padding(.horizontal, 8)
                     .background(.ultraThinMaterial)
                     Spacer()
+                    BarraFoto(scatto: s, raccolta: raccolta)
                 }
                 .transition(.opacity)
             }
+            CuoreGrande(colpi: colpi)
+        }
+        .sensoryFeedback(.impact(weight: .light), trigger: colpi)
+        .alert("Attenzione", isPresented: Binding(get: { cassetto.guaio != nil }, set: { if !$0 { cassetto.guaio = nil } })) {
+            Button("OK") { cassetto.guaio = nil }
+        } message: {
+            Text(cassetto.guaio ?? "")
         }
         .statusBarHidden(!controlli)
         .preferredColorScheme(.dark)
@@ -103,8 +122,14 @@ struct FotoAperta: View {
         }
         .sheet(item: $info) { s in
             Informazioni(pacchetto: pacchetto, scatto: s)
+                .environmentObject(cassetto)
                 .presentationDragIndicator(.visible)
         }
+    }
+
+    private func doppioTocco(_ s: Scatto) {
+        if !cassetto.haIlCuore(s) { cassetto.cuore([s.impronta], acceso: true) }
+        colpi += 1
     }
 
     private func prepara(intorno id: Int64?) {
@@ -128,8 +153,11 @@ struct Pagina: View {
     @Binding var giu: CGFloat
     let chiudi: () -> Void
     let mostraInfo: () -> Void
+    let doppio: () -> Void
 
     @StateObject private var movimento = Movimento()
+    @State private var ultimoTocco: Date?
+    @State private var attesa: Task<Void, Never>?
     @State private var piccola: UIImage?
     @State private var grande: UIImage?
     @State private var rotta = false
@@ -166,6 +194,7 @@ struct Pagina: View {
             }
             if scatto.video, controlli, movimento.pronto {
                 ComandiVideo(movimento: movimento)
+                    .padding(.bottom, Gesti.sopraLaBarra)
             } else if scatto.live, controlli, movimento.pronto {
                 VStack {
                     Spacer()
@@ -177,6 +206,7 @@ struct Pagina: View {
                         Spacer()
                     }
                     .background(.ultraThinMaterial)
+                    .padding(.bottom, Gesti.sopraLaBarra)
                 }
             }
         }
@@ -191,6 +221,7 @@ struct Pagina: View {
         .onChange(of: attiva) { _, si in aggiorna(attiva: si) }
         .onChange(of: movimentoAcceso) { _, _ in aggiorna(attiva: attiva) }
         .onDisappear {
+            attesa?.cancel()
             movimento.ferma()
             scala = 1
             pan = .zero
@@ -228,7 +259,21 @@ struct Pagina: View {
                 let durata = v.time.timeIntervalSince(inizioTocco ?? v.time)
                 switch modo {
                 case .none where durata < Gesti.tocco:
-                    tocco()
+                    if let prima = ultimoTocco, v.time.timeIntervalSince(prima) < Gesti.doppio {
+                        ultimoTocco = nil
+                        attesa?.cancel()
+                        attesa = nil
+                        doppio()
+                    } else {
+                        ultimoTocco = v.time
+                        attesa?.cancel()
+                        attesa = Task { @MainActor in
+                            try? await Task.sleep(for: .seconds(Gesti.doppio))
+                            guard !Task.isCancelled else { return }
+                            ultimoTocco = nil
+                            tocco()
+                        }
+                    }
                 case .chiudi?:
                     if t.height > Gesti.chiudeDopo || v.velocity.height > Gesti.chiudeVeloce {
                         chiudi()
@@ -425,5 +470,47 @@ struct Informazioni: View {
         .presentationDetents([.fraction(0.45), .large], selection: $altezza)
         .onChange(of: strada.count) { _, n in withAnimation { altezza = n > 0 ? .large : .fraction(0.45) } }
         .task(id: scatto.id) { dettagli = try? pacchetto.archivio.dettagli(scatto.id) }
+    }
+}
+
+struct BarraFoto: View {
+    let scatto: Scatto
+    let raccolta: Int64?
+    @EnvironmentObject var cassetto: Cassetto
+    @State private var chiedeTogli = false
+
+    var body: some View {
+        let acceso = cassetto.haIlCuore(scatto)
+        HStack {
+            Button { cassetto.cuore([scatto.impronta], acceso: !acceso) } label: {
+                Image(systemName: acceso ? "heart.fill" : "heart")
+                    .font(.title2)
+                    .contentTransition(.symbolEffect(.replace))
+                    .padding(10)
+            }
+            .sensoryFeedback(.selection, trigger: acceso)
+            .accessibilityLabel(acceso ? "Togli il cuore" : "Metti il cuore")
+            Spacer()
+            if let raccolta {
+                Button { chiedeTogli = true } label: {
+                    Image(systemName: "rectangle.stack.badge.minus").font(.title3).padding(10)
+                }
+                .accessibilityLabel("Togli da questa raccolta")
+                .confirmationDialog("Togliere dalla raccolta?", isPresented: $chiedeTogli, titleVisibility: .visible) {
+                    Button("Togli questa foto", role: .destructive) {
+                        cassetto.togli([scatto.impronta], da: raccolta)
+                    }
+                } message: {
+                    Text("La foto resta nell'archivio: esce solo da questa raccolta.")
+                }
+            }
+            MenuRaccolta(impronte: { [scatto.impronta] }, fatto: {}) {
+                Image(systemName: "rectangle.stack.badge.plus").font(.title3).padding(10)
+            }
+            .accessibilityLabel("Aggiungi a una raccolta")
+        }
+        .frame(height: Gesti.barra)
+        .padding(.horizontal, 8)
+        .background(.ultraThinMaterial)
     }
 }
