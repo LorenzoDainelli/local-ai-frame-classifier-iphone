@@ -619,6 +619,7 @@ struct Impostazioni: View {
     @AppStorage("visore.proporzioni") private var proporzioni = false
     @EnvironmentObject var cassetto: Cassetto
     @Environment(\.dismiss) private var chiudi
+    @AppStorage(Giro.chiave) private var giroVisto = false
 
     var body: some View {
         NavigationStack {
@@ -644,9 +645,8 @@ struct Impostazioni: View {
                         .font(.callout)
                 }
                 Section("Riservatezza") {
-                    Text("Le foto non compaiono negli screenshot, nelle registrazioni dello schermo e sullo schermo "
-                         + "duplicato; se qualcosa registra, il Visore si copre. È una difesa parziale: una seconda "
-                         + "fotocamera la supera.")
+                    Text("Se lo schermo viene registrato o duplicato, il Visore si copre di nero. Negli screenshot "
+                         + "prova a uscire nero anche lui. È una difesa parziale: una seconda fotocamera la supera.")
                         .font(.callout)
                     Text("Il Visore non usa internet, non manda notifiche e non accetta le tastiere di altre app. "
                          + "Chiede un solo permesso: la posizione mentre è aperto, per il diario.")
@@ -672,6 +672,12 @@ struct Impostazioni: View {
                     }
                     if let v = info["versione_officina"] { LabeledContent("Officina", value: v) }
                     LabeledContent("Visore", value: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "")
+                }
+                Section {
+                    Button("Rivedi il giro di benvenuto") {
+                        chiudi()
+                        giroVisto = false
+                    }
                 }
                 Section("Licenze") {
                     Text("SQLite: pubblico dominio. Crittografia: CryptoKit di Apple, compresa nel sistema. "

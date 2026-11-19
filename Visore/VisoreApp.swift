@@ -317,6 +317,7 @@ struct Galleria: View {
     let pacchetto: Pacchetto
     @EnvironmentObject var cassetto: Cassetto
     @State private var impostazioni = false
+    @AppStorage(Giro.chiave) private var giroVisto = false
 
     var body: some View {
         TabView {
@@ -359,6 +360,9 @@ struct Galleria: View {
             }
         }
         .sheet(isPresented: $impostazioni) { Impostazioni(pacchetto: pacchetto).environmentObject(cassetto) }
+        .fullScreenCover(isPresented: Binding(get: { !giroVisto && !impostazioni }, set: { if !$0 { giroVisto = true } })) {
+            GiroDiBenvenuto { giroVisto = true }
+        }
         .alert("Attenzione", isPresented: Binding(get: { cassetto.guaio != nil }, set: { if !$0 { cassetto.guaio = nil } })) {
             Button("OK") { cassetto.guaio = nil }
         } message: {
