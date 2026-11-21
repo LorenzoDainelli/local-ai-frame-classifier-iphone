@@ -240,6 +240,12 @@ struct Sblocco: View {
             if let scade = Firma.scadenza() {
                 Text(Firma.aParole(fino: scade)).font(.footnote).foregroundStyle(.secondary)
             }
+            if !Scudo.attivo {
+                Text("Su questa versione di iOS il blocco degli screenshot ha fatto chiudere il Visore, quindi adesso è spento: gli screenshot mostrerebbero le foto.")
+                    .font(.footnote).foregroundStyle(.red).multilineTextAlignment(.center)
+                Button("Riprova il blocco alla prossima apertura") { Scudo.riprova() }
+                    .font(.footnote)
+            }
             if prova {
                 Text("Prova con 5 foto finte. La password è: tre parole che ricordi")
                     .foregroundStyle(.secondary).multilineTextAlignment(.center)

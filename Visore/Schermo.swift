@@ -15,7 +15,12 @@ final class Delegato: NSObject, UIApplicationDelegate {
 }
 
 enum Scudo {
-    static let segno = 0x5C0D0
+    static let inProva = "visore.scudo.in.prova"
+    static let saltato = "visore.scudo.saltato"
+    @MainActor private static var campi: [ObjectIdentifier: UITextField] = [:]
+    @MainActor private static var controllato = false
+
+    static var attivo: Bool { !UserDefaults.standard.bool(forKey: saltato) }
 
     @MainActor static func copriTutto() {
         for scena in UIApplication.shared.connectedScenes {
@@ -25,25 +30,37 @@ enum Scudo {
     }
 
     @MainActor static func copri(_ finestra: UIWindow) {
+        let d = UserDefaults.standard
+        if !controllato {
+            controllato = true
+            if d.bool(forKey: inProva) {
+                d.set(false, forKey: inProva)
+                d.set(true, forKey: saltato)
+            }
+        }
+        guard attivo else { return }
         let nome = NSStringFromClass(type(of: finestra))
+        let chi = ObjectIdentifier(finestra)
         guard finestra.windowLevel == .normal, !nome.contains("Keyboard"), !nome.contains("TextEffects"),
-              finestra.viewWithTag(segno) == nil, let sopra = finestra.layer.superlayer else { return }
-        let campo = UITextField()
+              campi[chi] == nil, let sopra = finestra.layer.superlayer else { return }
+        let campo = UITextField(frame: .zero)
         campo.isSecureTextEntry = true
         campo.isUserInteractionEnabled = false
-        campo.tag = segno
-        finestra.addSubview(campo)
-        campo.translatesAutoresizingMaskIntoConstraints = false
-        NSLayoutConstraint.activate([
-            campo.centerXAnchor.constraint(equalTo: finestra.centerXAnchor),
-            campo.centerYAnchor.constraint(equalTo: finestra.centerYAnchor),
-        ])
-        guard let strato = campo.layer.sublayers?.last else {
-            campo.removeFromSuperview()
-            return
-        }
+        guard let strato = campo.layer.sublayers?.last else { return }
+        d.set(true, forKey: inProva)
+        d.synchronize()
+        campi[chi] = campo
         sopra.addSublayer(campo.layer)
         strato.addSublayer(finestra.layer)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+            UserDefaults.standard.set(false, forKey: inProva)
+        }
+    }
+
+    static func riprova() {
+        let d = UserDefaults.standard
+        d.set(false, forKey: saltato)
+        d.set(false, forKey: inProva)
     }
 }
 
