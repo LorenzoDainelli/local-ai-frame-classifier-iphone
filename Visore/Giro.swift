@@ -21,20 +21,20 @@ enum Giro {
                          + "Tocca una foto per aprirla."),
         PassoDelGiro(id: 2, simbolo: "livephoto",
                      titolo: "Le live photo",
-                     testo: "Tocca la foto: si muove una volta. Appoggia il dito e scendi piano: resta accesa "
-                         + "anche senza dito. Tocca di nuovo per spegnerla."),
+                     testo: "Tieni il dito premuto su una live photo: si muove finché tieni. "
+                         + "Un tocco, invece, nasconde e rimostra tutti i comandi."),
         PassoDelGiro(id: 3, simbolo: "arrow.down.to.line",
                      titolo: "Chiudere e vedere di più",
-                     testo: "Giù di scatto chiude la foto. Su mostra i comandi e le informazioni. "
-                         + "Il gesto conta solo quando arriva in fondo: mollando prima non succede niente."),
+                     testo: "In basso ci sono le miniature di prima e dopo: toccane una per saltarci. "
+                         + "Giù di scatto chiude la foto, su mostra le informazioni."),
         PassoDelGiro(id: 4, simbolo: "heart",
                      titolo: "Preferiti e raccolte",
                      testo: "Due tocchi sulla foto mettono il cuore. Con «Scegli» nella griglia prendi più foto "
                          + "e fai una raccolta. Tutto torna al PC col cavo."),
         PassoDelGiro(id: 5, simbolo: "square.stack",
-                     titolo: "Nodi, Persone, Cerca",
-                     testo: "In basso: le categorie del PC, le persone riconosciute e la ricerca. "
-                         + "Tocca di nuovo la sezione in cui sei per tornare in cima."),
+                     titolo: "Foto, Nodi, Persone",
+                     testo: "La barra in basso porta alle foto, alle categorie del PC e alle persone. "
+                         + "La lente in alto cerca. Tocca di nuovo la sezione in cui sei per tornare in cima."),
         PassoDelGiro(id: 6, simbolo: "lock",
                      titolo: "Si chiude da solo",
                      testo: "Appena esci o cambi app il Visore si chiude, e al rientro chiede Face ID. "
@@ -51,48 +51,67 @@ struct GiroDiBenvenuto: View {
             HStack {
                 Spacer()
                 Button("Salta", action: finito)
-                    .padding()
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(Tinta.tenue)
+                    .padding(.horizontal, 20)
+                    .frame(height: 44)
             }
             TabView(selection: $qui) {
                 ForEach(Giro.passi) { passo in
-                    VStack(spacing: 22) {
-                        Spacer()
-                        Image(systemName: passo.simbolo)
-                            .font(.system(size: 64, weight: .light))
-                            .foregroundStyle(.tint)
-                        Text(passo.titolo)
-                            .font(.title2.weight(.semibold))
-                            .multilineTextAlignment(.center)
-                        Text(passo.testo)
-                            .font(.body)
-                            .foregroundStyle(.secondary)
-                            .multilineTextAlignment(.center)
-                            .frame(maxWidth: 460)
-                        Spacer()
-                        Spacer()
+                    ScrollView {
+                        VStack(spacing: 20) {
+                            Image(systemName: passo.simbolo)
+                                .font(.system(size: 34, weight: .regular))
+                                .foregroundStyle(Tinta.accento)
+                                .frame(width: 84, height: 84)
+                                .background(Tinta.alone, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+                                .symbolEffect(.bounce, value: qui == passo.id)
+                            Text(passo.titolo)
+                                .font(Carattere.titolo)
+                                .foregroundStyle(Tinta.ink)
+                                .multilineTextAlignment(.center)
+                            Text(passo.testo)
+                                .font(.system(size: 16))
+                                .foregroundStyle(Tinta.attenuato)
+                                .multilineTextAlignment(.center)
+                                .lineSpacing(3)
+                                .frame(maxWidth: 440)
+                        }
+                        .padding(.horizontal, 28)
+                        .padding(.vertical, 30)
+                        .frame(maxWidth: .infinity)
                     }
-                    .padding(.horizontal, 28)
+                    .scrollBounceBehavior(.basedOnSize)
+                    .scrollIndicators(.hidden)
                     .tag(passo.id)
                 }
             }
-            .tabViewStyle(.page(indexDisplayMode: .always))
-            .indexViewStyle(.page(backgroundDisplayMode: .always))
+            .tabViewStyle(.page(indexDisplayMode: .never))
+            HStack(spacing: 6) {
+                ForEach(Giro.passi) { p in
+                    Capsule()
+                        .fill(p.id == qui ? Tinta.accento : Tinta.lineaForte)
+                        .frame(width: p.id == qui ? 22 : 7, height: 7)
+                }
+            }
+            .animation(Moto.molla, value: qui)
+            .padding(.bottom, 18)
             Button {
                 if qui < Giro.passi.count - 1 {
-                    withAnimation { qui += 1 }
+                    withAnimation(Moto.scena) { qui += 1 }
                 } else {
                     finito()
                 }
             } label: {
                 Text(qui < Giro.passi.count - 1 ? "Avanti" : "Inizia")
-                    .font(.headline)
-                    .frame(maxWidth: 420)
-                    .padding(.vertical, 6)
+                    .contentTransition(.opacity)
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(TastoPieno())
+            .frame(maxWidth: 420)
             .padding(.horizontal, 28)
-            .padding(.bottom, 24)
+            .padding(.bottom, 20)
         }
-        .background(Color.black.ignoresSafeArea())
+        .background(Tinta.fondo.ignoresSafeArea())
+        .sensoryFeedback(.selection, trigger: qui)
     }
 }

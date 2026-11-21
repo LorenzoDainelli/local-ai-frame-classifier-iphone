@@ -10,13 +10,13 @@ struct Volto: View {
 
     var body: some View {
         ZStack {
-            Circle().fill(Color(white: 0.16))
+            Circle().fill(Tinta.alone)
             if let immagine {
                 Image(uiImage: immagine).resizable().scaledToFill()
             } else {
                 Text(String(persona.nome.prefix(1)).uppercased())
-                    .font(.system(size: lato * 0.42, weight: .semibold))
-                    .foregroundStyle(.secondary)
+                    .font(Carattere.serif(lato * 0.44, .body))
+                    .foregroundStyle(Tinta.accento)
             }
         }
         .frame(width: lato, height: lato)
@@ -31,33 +31,51 @@ struct Volto: View {
 
 struct Persone: View {
     let pacchetto: Pacchetto
+    let cima: Int
     @State private var tutte: [Persona] = []
+    @State private var compatta = false
 
     var body: some View {
-        GeometryReader { g in
-            let lato = min(120, (g.size.width - 16 * 4) / 3)
+        ScrollViewReader { proxy in
             ScrollView {
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 16), count: 3), spacing: 20) {
-                    ForEach(tutte) { p in
-                        NavigationLink(value: p) {
-                            VStack(spacing: 4) {
-                                Volto(pacchetto: pacchetto, persona: p, lato: lato)
-                                Text(p.nome).font(.subheadline.weight(.semibold)).lineLimit(1)
-                                Text(Testi.numero(p.quanti)).font(.caption).foregroundStyle(.secondary).monospacedDigit()
+                VStack(alignment: .leading, spacing: 0) {
+                    Testa(titolo: "Persone", sottotitolo: sottotitolo) { AzioniDiTesta() }
+                        .id("cima")
+                    if tutte.isEmpty {
+                        Vuoto(titolo: "Nessuna persona", testo: "In questo pacchetto non ci sono persone con un nome.",
+                              simbolo: "person.2")
+                    } else {
+                        Scheda {
+                            ForEach(Array(tutte.enumerated()), id: \.element.id) { i, p in
+                                if i > 0 { Separa() }
+                                NavigationLink(value: p) {
+                                    Riga(titolo: p.nome, sottotitolo: Testi.periodo(p.dal, p.al), numero: p.quanti) {
+                                        Volto(pacchetto: pacchetto, persona: p, lato: 44)
+                                    }
+                                }
+                                .buttonStyle(Premibile())
                             }
                         }
-                        .buttonStyle(.plain)
+                        .padding(.horizontal, 16)
                     }
                 }
-                .padding(16)
-                if tutte.isEmpty {
-                    Text("In questo pacchetto non ci sono persone con un nome.")
-                        .foregroundStyle(.secondary).padding()
-                }
+                .frame(maxWidth: 720)
+                .frame(maxWidth: .infinity)
+                .padding(.bottom, 100)
             }
+            .scrollIndicators(.hidden)
+            .segueLaTesta($compatta)
+            .onChange(of: cima) { _, _ in withAnimation(Moto.scena) { proxy.scrollTo("cima", anchor: .top) } }
         }
-        .navigationTitle("Persone")
+        .testaCompatta("Persone", visibile: compatta) { AzioniDiTesta() }
+        .background(Tinta.fondo.ignoresSafeArea())
+        .senzaBarraDiSistema()
         .onAppear { if tutte.isEmpty { tutte = (try? pacchetto.archivio.persone()) ?? [] } }
+    }
+
+    private var sottotitolo: String? {
+        guard !tutte.isEmpty else { return nil }
+        return tutte.count == 1 ? "1 persona" : "\(Testi.numero(tutte.count)) persone"
     }
 }
 
@@ -67,46 +85,40 @@ struct PersonaVista: View {
     @State private var compagni: [Compagno] = []
 
     var body: some View {
-        GrigliaGiorni(pacchetto: pacchetto, filtro: Filtro(persone: [persona.id]), testa: AnyView(testa))
-            .navigationTitle(persona.nome)
-            .navigationBarTitleDisplayMode(.inline)
+        GrigliaGiorni(pacchetto: pacchetto, filtro: Filtro(persone: [persona.id]), titolo: persona.nome,
+                      sottotitolo: [Testi.foto(persona.quanti), Testi.periodo(persona.dal, persona.al)]
+                        .compactMap { $0 }.joined(separator: " · "),
+                      testa: AnyView(testa))
             .onAppear { if compagni.isEmpty { compagni = (try? pacchetto.archivio.insieme(a: persona.id)) ?? [] } }
     }
 
+    @ViewBuilder
     private var testa: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(spacing: 14) {
-                Volto(pacchetto: pacchetto, persona: persona, lato: 72)
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(persona.nome).font(.title2.bold()).lineLimit(2)
-                    Text([Testi.foto(persona.quanti), Testi.periodo(persona.dal, persona.al)]
-                        .compactMap { $0 }.joined(separator: " · "))
-                        .font(.subheadline).foregroundStyle(.secondary)
-                }
-            }
-            if !compagni.isEmpty {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Spesso insieme a").font(.footnote.weight(.semibold)).foregroundStyle(.secondary)
-                    ScrollView(.horizontal) {
-                        LazyHStack(spacing: 14) {
-                            ForEach(compagni) { c in
-                                NavigationLink(value: Coppia(prima: persona, seconda: c.persona)) {
-                                    VStack(spacing: 3) {
-                                        Volto(pacchetto: pacchetto, persona: c.persona, lato: 52)
-                                        Text(c.persona.nome).font(.caption).lineLimit(1)
-                                    }
-                                    .frame(width: 64)
+        if !compagni.isEmpty {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("SPESSO INSIEME A").etichettaMaiuscola().padding(.horizontal, 16)
+                ScrollView(.horizontal) {
+                    LazyHStack(alignment: .top, spacing: 14) {
+                        ForEach(compagni) { c in
+                            NavigationLink(value: Coppia(prima: persona, seconda: c.persona)) {
+                                VStack(spacing: 5) {
+                                    Volto(pacchetto: pacchetto, persona: c.persona, lato: 56)
+                                    Text(c.persona.nome).font(.system(size: 12)).foregroundStyle(Tinta.ink)
+                                        .lineLimit(2).multilineTextAlignment(.center)
+                                    Text(Testi.numero(c.quante)).font(.system(size: 11)).foregroundStyle(Tinta.tenue)
+                                        .monospacedDigit()
                                 }
-                                .buttonStyle(.plain)
+                                .frame(width: 70)
                             }
+                            .buttonStyle(Premuto())
                         }
                     }
-                    .scrollIndicators(.hidden)
+                    .padding(.horizontal, 16)
                 }
+                .scrollIndicators(.hidden)
             }
+            .padding(.bottom, 6)
         }
-        .padding(.horizontal, 12)
-        .padding(.top, 8)
     }
 }
 
@@ -118,38 +130,24 @@ struct Coppia: Hashable {
 struct CoppiaVista: View {
     let pacchetto: Pacchetto
     let coppia: Coppia
-    @Environment(\.dismiss) private var indietro
     @State private var quante: Int?
 
     var body: some View {
         let filtro = Filtro(persone: [coppia.prima.id, coppia.seconda.id])
-        GrigliaGiorni(pacchetto: pacchetto, filtro: filtro, testa: AnyView(testa),
+        GrigliaGiorni(pacchetto: pacchetto, filtro: filtro, titolo: "\(coppia.prima.nome) e \(coppia.seconda.nome)",
+                      sottotitolo: quante.map { Testi.foto($0) + " insieme" }, testa: AnyView(testa),
                       vuota: "Nessuna foto con tutte e due.")
-            .navigationTitle("Tutte e due")
-            .navigationBarTitleDisplayMode(.inline)
             .onAppear { if quante == nil { quante = try? pacchetto.archivio.quanti(filtro: filtro) } }
     }
 
     private var testa: some View {
-        HStack(spacing: 12) {
-            ZStack(alignment: .leading) {
-                Volto(pacchetto: pacchetto, persona: coppia.prima, lato: 48)
-                Volto(pacchetto: pacchetto, persona: coppia.seconda, lato: 48)
-                    .overlay(Circle().stroke(Color.black, lineWidth: 2))
-                    .offset(x: 30)
-            }
-            .frame(width: 80, alignment: .leading)
-            VStack(alignment: .leading, spacing: 2) {
-                Text("\(coppia.prima.nome) e \(coppia.seconda.nome)").font(.headline).lineLimit(2)
-                if let quante { Text(Testi.foto(quante)).font(.subheadline).foregroundStyle(.secondary) }
-            }
-            Spacer()
-            Button { indietro() } label: {
-                Image(systemName: "xmark.circle.fill").font(.title2).foregroundStyle(.secondary)
-            }
-            .accessibilityLabel("Togli «tutte e due»")
+        HStack(spacing: 0) {
+            Volto(pacchetto: pacchetto, persona: coppia.prima, lato: 52)
+            Volto(pacchetto: pacchetto, persona: coppia.seconda, lato: 52)
+                .overlay(Circle().stroke(Tinta.fondo, lineWidth: 3))
+                .padding(.leading, -16)
         }
-        .padding(.horizontal, 12)
-        .padding(.top, 8)
+        .padding(.horizontal, 16)
+        .padding(.bottom, 6)
     }
 }

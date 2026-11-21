@@ -110,13 +110,19 @@ final class Cattura: ObservableObject {
 struct CoperturaCattura: View {
     var body: some View {
         ZStack {
-            Color.black.ignoresSafeArea()
-            VStack(spacing: 12) {
-                Image(systemName: "eye.slash").font(.largeTitle)
+            Tinta.fondo.ignoresSafeArea()
+            VStack(spacing: 16) {
+                Image(systemName: "eye.slash")
+                    .font(.system(size: 28, weight: .regular))
+                    .foregroundStyle(Tinta.accento)
+                    .frame(width: 68, height: 68)
+                    .background(Tinta.alone, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                Text("Schermo coperto").font(Carattere.titoletto).foregroundStyle(Tinta.ink)
                 Text("Lo schermo viene registrato o duplicato: il Visore non mostra niente finché non smette.")
+                    .font(.system(size: 15)).foregroundStyle(Tinta.attenuato)
                     .multilineTextAlignment(.center)
+                    .frame(maxWidth: 360)
             }
-            .foregroundStyle(.white.opacity(0.7))
             .padding(32)
         }
     }

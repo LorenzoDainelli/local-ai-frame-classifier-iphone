@@ -112,6 +112,7 @@ struct TutteLeRaccolte: Hashable {}
 
 struct MenuRaccolta<Etichetta: View>: View {
     @EnvironmentObject var cassetto: Cassetto
+    @EnvironmentObject var annunci: Annunci
     let impronte: () -> [String]
     let fatto: () -> Void
     @ViewBuilder let etichetta: () -> Etichetta
@@ -130,7 +131,10 @@ struct MenuRaccolta<Etichetta: View>: View {
                 Section("Aggiungi a") {
                     ForEach(cassetto.raccolte) { r in
                         Button(r.nome) {
-                            if cassetto.aggiungi(impronte(), a: r.numero) { fatto() }
+                            if cassetto.aggiungi(impronte(), a: r.numero) {
+                                annunci.di("Aggiunte a «\(r.nome)»", simbolo: "rectangle.stack.badge.plus")
+                                fatto()
+                            }
                         }
                     }
                 }
@@ -139,7 +143,10 @@ struct MenuRaccolta<Etichetta: View>: View {
         .alert("Nuova raccolta", isPresented: $chiedeNome) {
             TextField("Nome", text: $nome)
             Button("Crea") {
-                if cassetto.nuova(nome, impronte: daMettere) != nil { fatto() }
+                if cassetto.nuova(nome, impronte: daMettere) != nil {
+                    annunci.di("Raccolta «\(nome)» creata", simbolo: "rectangle.stack.badge.plus")
+                    fatto()
+                }
             }
             .disabled(nome.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             Button("Annulla", role: .cancel) {}
@@ -162,12 +169,12 @@ struct CopertinaRaccolta: View {
             if let immagine {
                 Image(uiImage: immagine).resizable().scaledToFill()
             } else {
-                Color(white: 0.12)
-                Image(systemName: simbolo).font(.title2).foregroundStyle(.secondary)
+                Tinta.alone
+                Image(systemName: simbolo).font(.system(size: lato * 0.34, weight: .medium)).foregroundStyle(Tinta.accento)
             }
         }
         .frame(width: lato, height: lato)
-        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .clipShape(RoundedRectangle(cornerRadius: lato > 60 ? 10 : 8, style: .continuous))
         .task(id: impronte) {
             guard let s = (try? pacchetto.archivio.scatti(filtro: Filtro(impronte: impronte), limite: 1))?.first else {
                 immagine = nil
@@ -187,65 +194,83 @@ struct RigaRaccolta: View {
     let simbolo: String
 
     var body: some View {
-        HStack(spacing: 14) {
-            CopertinaRaccolta(pacchetto: pacchetto, impronte: impronte, lato: 64, simbolo: simbolo)
-            VStack(alignment: .leading, spacing: 3) {
-                Text(nome).font(.headline).lineLimit(2)
-                Text(impronte.count == 1 ? "1 foto" : "\(Testi.numero(impronte.count)) foto")
-                    .font(.subheadline).foregroundStyle(.secondary).monospacedDigit()
-            }
+        Riga(titolo: nome, numero: impronte.count) {
+            CopertinaRaccolta(pacchetto: pacchetto, impronte: impronte, lato: 52, simbolo: simbolo)
         }
-        .padding(.vertical, 2)
     }
 }
 
 struct RaccolteVista: View {
     let pacchetto: Pacchetto
     @EnvironmentObject var cassetto: Cassetto
+    @EnvironmentObject var annunci: Annunci
+    @Environment(\.dismiss) private var indietro
     @State private var daButtare: Raccolta?
     @State private var daRinominare: Raccolta?
     @State private var nome = ""
+    @State private var compatta = false
 
     var body: some View {
-        List {
-            NavigationLink(value: QualeRaccolta(numero: nil)) {
-                RigaRaccolta(pacchetto: pacchetto, nome: "Preferiti", impronte: Array(cassetto.cuori).sorted(),
-                             simbolo: "heart")
-            }
-            Section {
-                ForEach(cassetto.raccolte) { r in
-                    NavigationLink(value: QualeRaccolta(numero: r.numero)) {
-                        RigaRaccolta(pacchetto: pacchetto, nome: r.nome, impronte: r.impronte,
-                                     simbolo: "rectangle.stack")
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                Testa(titolo: "Raccolte", sottotitolo: "Preferiti e raccolte tornano al PC col cavo",
+                      indietro: { indietro() }) { EmptyView() }
+                    .padding(.horizontal, -16)
+                Scheda {
+                    NavigationLink(value: QualeRaccolta(numero: nil)) {
+                        RigaRaccolta(pacchetto: pacchetto, nome: "Preferiti", impronte: Array(cassetto.cuori).sorted(),
+                                     simbolo: "heart.fill")
                     }
-                    .swipeActions {
-                        Button("Elimina", role: .destructive) { daButtare = r }
-                        Button("Rinomina") {
-                            nome = r.nome
-                            daRinominare = r
+                    .buttonStyle(Premibile())
+                }
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("LE TUE RACCOLTE").etichettaMaiuscola().padding(.horizontal, 4)
+                    if cassetto.raccolte.isEmpty {
+                        Text("Per farne una: nella griglia premi «Scegli», tocca le foto e poi il tasto delle raccolte in basso.")
+                            .font(.system(size: 13.5)).foregroundStyle(Tinta.tenue)
+                            .padding(.horizontal, 4)
+                    } else {
+                        Scheda {
+                            ForEach(Array(cassetto.raccolte.enumerated()), id: \.element.numero) { i, r in
+                                if i > 0 { Separa(rientro: 78) }
+                                NavigationLink(value: QualeRaccolta(numero: r.numero)) {
+                                    RigaRaccolta(pacchetto: pacchetto, nome: r.nome, impronte: r.impronte,
+                                                 simbolo: "rectangle.stack")
+                                }
+                                .buttonStyle(Premibile())
+                                .contextMenu {
+                                    Button {
+                                        nome = r.nome
+                                        daRinominare = r
+                                    } label: { Label("Rinomina", systemImage: "pencil") }
+                                    Button(role: .destructive) { daButtare = r } label: { Label("Elimina", systemImage: "trash") }
+                                }
+                            }
                         }
+                        Text("Tieni premuto su una raccolta per rinominarla o eliminarla.")
+                            .font(.system(size: 12.5)).foregroundStyle(Tinta.tenue)
+                            .padding(.horizontal, 4)
                     }
-                    .contextMenu {
-                        Button {
-                            nome = r.nome
-                            daRinominare = r
-                        } label: { Label("Rinomina", systemImage: "pencil") }
-                        Button(role: .destructive) { daButtare = r } label: { Label("Elimina", systemImage: "trash") }
-                    }
-                }
-            } header: {
-                Text("Le tue raccolte")
-            } footer: {
-                if cassetto.raccolte.isEmpty {
-                    Text("Per farne una: nella griglia premi «Scegli», tocca le foto e poi il tasto delle raccolte in basso.")
                 }
             }
+            .padding(.horizontal, 16)
+            .padding(.bottom, 100)
+            .frame(maxWidth: 720)
+            .frame(maxWidth: .infinity)
         }
-        .navigationTitle("Raccolte")
+        .scrollIndicators(.hidden)
+        .segueLaTesta($compatta)
+        .testaCompatta("Raccolte", visibile: compatta, indietro: { indietro() }) { EmptyView() }
+        .background(Tinta.fondo.ignoresSafeArea())
+        .senzaBarraDiSistema()
+        .animation(Moto.passo, value: cassetto.raccolte.map(\.numero))
         .confirmationDialog(daButtare.map { "Eliminare «\($0.nome)»?" } ?? "",
                             isPresented: Binding(get: { daButtare != nil }, set: { if !$0 { daButtare = nil } }),
                             titleVisibility: .visible, presenting: daButtare) { r in
-            Button("Elimina la raccolta", role: .destructive) { cassetto.butta(r.numero) }
+            Button("Elimina la raccolta", role: .destructive) {
+                cassetto.butta(r.numero)
+                annunci.di("Raccolta eliminata", simbolo: "trash")
+            }
         } message: { _ in
             Text("Le foto restano tutte: si toglie solo la raccolta, anche dal computer al prossimo travaso.")
         }
@@ -268,17 +293,17 @@ struct RaccoltaVista: View {
     var body: some View {
         Group {
             if let mostrate {
-                GrigliaGiorni(pacchetto: pacchetto, filtro: Filtro(impronte: mostrate), raccolta: quale.numero,
+                GrigliaGiorni(pacchetto: pacchetto, filtro: Filtro(impronte: mostrate), titolo: titolo,
+                              raccolta: quale.numero,
                               vuota: quale.numero == nil
                                   ? "Nessun preferito. Tocca due volte una foto, o il cuore in basso, per metterla qui."
                                   : "Questa raccolta è vuota.")
                     .id(mostrate)
             } else {
-                Color.clear
+                Tinta.fondo.ignoresSafeArea()
             }
         }
-        .navigationTitle(titolo)
-        .navigationBarTitleDisplayMode(.inline)
+        .senzaBarraDiSistema()
         .onAppear { if mostrate == nil { mostrate = attuali } }
         .onChange(of: cassetto.versione) { _, _ in if !cassetto.aperta { mostrate = attuali } }
         .onChange(of: cassetto.aperta) { _, si in if !si, mostrate != attuali { mostrate = attuali } }

@@ -25,7 +25,7 @@ targets:
         CFBundleDisplayName: Visore
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
-        UIUserInterfaceStyle: Dark
+        UIAppFonts: [SourceSerif4.ttf]
         UILaunchScreen: {}
         NSFaceIDUsageDescription: Face ID apre l'archivio senza riscrivere la password.
         NSLocationWhenInUseUsageDescription: "Solo per il diario: dove e quando guardi l'archivio. Resta cifrato sull'iPhone e torna solo al tuo PC, col cavo."

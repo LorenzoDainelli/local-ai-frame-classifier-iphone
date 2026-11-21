@@ -211,10 +211,19 @@ struct Linea {
 
 struct GrigliaGiorni: View {
     let pacchetto: Pacchetto
+    let titolo: String
+    let sottotitolo: String?
+    let radice: Bool
+    let cima: Int
     let testa: AnyView?
+    let menu: AnyView?
     let vuota: String
     let raccolta: Int64?
+    let conIndietro: Bool
     @EnvironmentObject var cassetto: Cassetto
+    @EnvironmentObject var interfaccia: Interfaccia
+    @EnvironmentObject var annunci: Annunci
+    @Environment(\.dismiss) private var indietro
     @StateObject private var elenco: Elenco
     @State private var scelti: Set<Int64>?
     @State private var chiedeTogli = false
@@ -224,6 +233,8 @@ struct GrigliaGiorni: View {
     @State private var visto: Int64 = 0
     @State private var pizzico: CGFloat = 1
     @State private var anteprima: Scatto?
+    @State private var compatta = false
+    @State private var anno: String?
     @Namespace private var zoom
 
     struct Aperto: Identifiable {
@@ -233,10 +244,17 @@ struct GrigliaGiorni: View {
 
     private static let livelli = [1, 3, 5, 7]
 
-    init(pacchetto: Pacchetto, filtro: Filtro = Filtro(), testa: AnyView? = nil, raccolta: Int64? = nil,
-         vuota: String = "Qui non ci sono foto.") {
+    init(pacchetto: Pacchetto, filtro: Filtro = Filtro(), titolo: String, sottotitolo: String? = nil,
+         radice: Bool = false, cima: Int = 0, testa: AnyView? = nil, menu: AnyView? = nil,
+         raccolta: Int64? = nil, vuota: String = "Qui non ci sono foto.", conIndietro: Bool = true) {
+        self.conIndietro = conIndietro
         self.pacchetto = pacchetto
+        self.titolo = titolo
+        self.sottotitolo = sottotitolo
+        self.radice = radice
+        self.cima = cima
         self.testa = testa
+        self.menu = menu
         self.raccolta = raccolta
         self.vuota = vuota
         _elenco = StateObject(wrappedValue: Elenco(archivio: pacchetto.archivio, filtro: filtro))
@@ -244,18 +262,24 @@ struct GrigliaGiorni: View {
 
     var body: some View {
         GeometryReader { g in
-            let lato = (g.size.width - CGFloat(colonne - 1) * 2) / CGFloat(colonne)
+            let largo = g.size.width > g.size.height * 1.2
+            let quante = largo ? min(12, max(colonne + 2, colonne * 2 - 1)) : colonne
+            let lato = floor((g.size.width - CGFloat(quante - 1) * 2) / CGFloat(quante))
             let gruppi = elenco.gruppi
             let linea = elenco.linea
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 0) {
+                        Testa(titolo: titolo, sottotitolo: sottotitoloVero,
+                              indietro: torna) { azioni }
+                            .id("cima")
+                        if radice { pillole(linea, proxy) }
                         if let testa { testa }
                         ForEach(gruppi) { gruppo in
-                            Intestazione(giorno: gruppo.giorno, luoghi: luoghi(gruppo),
+                            Intestazione(giorno: gruppo.giorno, luoghi: luoghi(gruppo), quante: quanteDel(gruppo),
                                          tutte: scelti == nil ? nil : tutteDelGiorno(gruppo, linea))
                                 .id("giorno-" + gruppo.id)
-                            LazyVGrid(columns: Array(repeating: GridItem(.fixed(lato), spacing: 2), count: colonne),
+                            LazyVGrid(columns: Array(repeating: GridItem(.fixed(lato), spacing: 2), count: quante),
                                       spacing: 2) {
                                 ForEach(gruppo.scatti) { s in
                                     Riquadro(pacchetto: pacchetto, scatto: s, lato: lato, proporzioni: proporzioni,
@@ -269,12 +293,15 @@ struct GrigliaGiorni: View {
                             }
                         }
                         if elenco.scatti.isEmpty {
-                            Text(vuota).foregroundStyle(.secondary).padding()
+                            Vuoto(titolo: "Nessuna foto", testo: vuota)
                         }
                     }
+                    .padding(.bottom, 100)
                 }
+                .scrollIndicators(.hidden)
+                .segueLaTesta($compatta)
                 .scaleEffect(pizzico, anchor: .top)
-                .gesture(MagnifyGesture()
+                .simultaneousGesture(MagnifyGesture()
                     .onChanged { pizzico = min(1.4, max(0.7, $0.magnification)) }
                     .onEnded { fine in
                         withAnimation(.snappy) {
@@ -284,17 +311,27 @@ struct GrigliaGiorni: View {
                     })
                 .overlay(alignment: .trailing) {
                     BarraAnni(linea: linea) { i in vai(i, linea, proxy) }
+                        .padding(.top, 120)
                 }
                 .onChange(of: visto) { _, id in
                     if aperto != nil { proxy.scrollTo(id, anchor: .center) }
                 }
+                .onChange(of: cima) { _, _ in
+                    withAnimation(Moto.scena) { proxy.scrollTo("cima", anchor: .top) }
+                    anno = nil
+                }
                 .fullScreenCover(item: $aperto) { a in
                     FotoAperta(pacchetto: pacchetto, elenco: elenco, inizio: a.indice, visto: $visto, raccolta: raccolta)
                         .environmentObject(cassetto)
+                        .environmentObject(annunci)
+                        .environmentObject(interfaccia)
                         .navigationTransition(.zoom(sourceID: visto, in: zoom))
                 }
             }
         }
+        .testaCompatta(titolo, visibile: compatta, indietro: torna) { azioni }
+        .background(Tinta.fondo.ignoresSafeArea())
+        .senzaBarraDiSistema()
         .overlay {
             if let anteprima {
                 Anteprima(pacchetto: pacchetto, scatto: anteprima)
@@ -303,21 +340,16 @@ struct GrigliaGiorni: View {
         }
         .animation(.spring(duration: 0.25), value: anteprima?.id)
         .sensoryFeedback(.impact(weight: .medium), trigger: anteprima?.id) { _, nuovo in nuovo != nil }
-        .toolbar {
-            if !elenco.scatti.isEmpty {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button(scelti == nil ? "Scegli" : "Annulla") {
-                        withAnimation(.snappy) { scelti = scelti == nil ? [] : nil }
-                    }
-                }
-            }
-        }
-        .toolbar(scelti == nil ? .automatic : .hidden, for: .tabBar)
         .safeAreaInset(edge: .bottom) {
             if let scelti {
                 BarraScelta(quante: scelti.count, tuttiColCuore: tuttiColCuore, raccolta: raccolta,
                             impronte: { impronteScelte }, cuore: { acceso in
-                                if cassetto.cuore(impronteScelte, acceso: acceso) { finito() }
+                                let n = impronteScelte.count
+                                if cassetto.cuore(impronteScelte, acceso: acceso) {
+                                    annunci.di(acceso ? "Cuore a \(Testi.foto(n))" : "Cuore tolto a \(Testi.foto(n))",
+                                               simbolo: acceso ? "heart.fill" : "heart.slash")
+                                    finito()
+                                }
                             }, togli: { chiedeTogli = true }, finito: finito)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
@@ -325,12 +357,76 @@ struct GrigliaGiorni: View {
         .confirmationDialog("Togliere dalla raccolta?", isPresented: $chiedeTogli, titleVisibility: .visible) {
             Button(impronteScelte.count == 1 ? "Togli 1 foto" : "Togli \(Testi.numero(impronteScelte.count)) foto",
                    role: .destructive) {
-                if let raccolta, cassetto.togli(impronteScelte, da: raccolta) { finito() }
+                if let raccolta, cassetto.togli(impronteScelte, da: raccolta) {
+                    annunci.di("Tolte dalla raccolta", simbolo: "rectangle.stack.badge.minus")
+                    finito()
+                }
             }
         } message: {
             Text("Le foto restano nell'archivio: escono solo da questa raccolta.")
         }
         .onChange(of: aperto?.id) { _, nuovo in cassetto.aperta = nuovo != nil }
+        .onChange(of: scelti == nil) { _, nessuno in interfaccia.scegliendo = !nessuno }
+        .onDisappear { if scelti != nil { scelti = nil; interfaccia.scegliendo = false } }
+    }
+
+    private var torna: (() -> Void)? {
+        if radice || !conIndietro { return nil }
+        return { indietro() }
+    }
+
+    private var sottotitoloVero: String? {
+        if let sottotitolo { return sottotitolo }
+        guard radice else { return nil }
+        let n = elenco.totale
+        return n == 1 ? "1 foto o video" : "\(Testi.numero(n)) foto e video"
+    }
+
+    @ViewBuilder
+    private var azioni: some View {
+        HStack(spacing: 8) {
+            if !elenco.scatti.isEmpty {
+                Button {
+                    withAnimation(.snappy) { scelti = scelti == nil ? [] : nil }
+                } label: {
+                    Pillola(testo: scelti == nil ? "Scegli" : "Annulla", scelta: scelti != nil)
+                }
+                .buttonStyle(Premuto())
+            }
+            if let menu { menu }
+            if radice { AzioniDiTesta() }
+        }
+    }
+
+    private func pillole(_ linea: Linea, _ proxy: ScrollViewProxy) -> some View {
+        ScrollView(.horizontal) {
+            HStack(spacing: 6) {
+                NavigationLink(value: TutteLeRaccolte()) {
+                    Pillola(testo: "Raccolte", simbolo: "heart")
+                }
+                .buttonStyle(Premuto())
+                Rectangle().fill(Tinta.linea).frame(width: 0.5, height: 20).padding(.horizontal, 4)
+                Button {
+                    anno = nil
+                    withAnimation(Moto.scena) { proxy.scrollTo("cima", anchor: .top) }
+                } label: { Pillola(testo: "Tutte", scelta: anno == nil) }
+                .buttonStyle(Premuto())
+                ForEach(linea.anni, id: \.anno) { a in
+                    Button {
+                        anno = a.anno
+                        if let i = linea.giorni.firstIndex(where: { $0.hasPrefix(a.anno) }) { vai(i, linea, proxy) }
+                    } label: { Pillola(testo: a.anno, scelta: anno == a.anno) }
+                    .buttonStyle(Premuto())
+                }
+            }
+            .padding(.horizontal, 16)
+        }
+        .scrollIndicators(.hidden)
+        .padding(.bottom, 4)
+    }
+
+    private func quanteDel(_ gruppo: GruppoDelGiorno) -> Int {
+        gruppo.giorno.flatMap { elenco.perGiorno[$0]?.quanti } ?? gruppo.scatti.count
     }
 
     private var impronteScelte: [String] {
@@ -414,20 +510,23 @@ struct BarraAnni: View {
                 if let dito {
                     ForEach(linea.anni, id: \.anno) { a in
                         Text(a.anno)
-                            .font(.caption2.weight(.semibold)).monospacedDigit()
-                            .foregroundStyle(.secondary)
+                            .font(.system(size: 11, weight: .semibold)).monospacedDigit()
+                            .foregroundStyle(Tinta.tenue)
                             .fixedSize()
                             .offset(x: -30, y: min(alto - 14, a.frazione * alto))
                     }
                     if let i = linea.indice(a: dito / alto), linea.giorni.indices.contains(i) {
                         Text(Testi.mese(linea.giorni[i]))
-                            .font(.footnote.weight(.semibold))
+                            .font(Carattere.piccolo)
+                            .foregroundStyle(Tinta.ink)
                             .fixedSize()
-                            .padding(.horizontal, 12).padding(.vertical, 7)
-                            .background(.regularMaterial, in: Capsule())
+                            .padding(.horizontal, 14).padding(.vertical, 7)
+                            .background(Tinta.superficie, in: Capsule())
+                            .overlay(Capsule().stroke(Tinta.lineaForte, lineWidth: 0.5))
+                            .shadow(color: Tinta.ombra, radius: 10, y: 4)
                             .offset(x: -72, y: min(max(0, dito - 16), alto - 32))
                     }
-                    Capsule().fill(.white.opacity(0.85))
+                    Capsule().fill(Tinta.accento)
                         .frame(width: 5, height: 36)
                         .offset(x: -4, y: min(max(0, dito - 18), alto - 36))
                 }
@@ -457,23 +556,27 @@ struct BarraAnni: View {
 struct Intestazione: View {
     let giorno: String?
     let luoghi: [String]
+    var quante: Int? = nil
     var tutte: (Bool, () -> Void)? = nil
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(Testi.giorno(giorno)).font(.title3.bold())
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            VStack(alignment: .leading, spacing: 1) {
+                Text(Testi.giorno(giorno)).font(Carattere.giorno).foregroundStyle(Tinta.ink)
                 if let l = Testi.luoghi(luoghi) {
-                    Text(l).font(.footnote).foregroundStyle(.secondary).lineLimit(1)
+                    Text(l).font(Carattere.minore).foregroundStyle(Tinta.tenue).lineLimit(1)
                 }
             }
             Spacer(minLength: 8)
             if let tutte {
                 Button(tutte.0 ? "Nessuna" : "Tutte", action: tutte.1)
-                    .font(.subheadline.weight(.semibold))
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(Tinta.accento)
+            } else if let quante {
+                Text(Testi.foto(quante)).font(.system(size: 12)).foregroundStyle(Tinta.tenue).monospacedDigit()
             }
         }
-        .padding(.horizontal, 12)
+        .padding(.horizontal, 16)
         .padding(.top, 18)
         .padding(.bottom, 8)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -485,7 +588,7 @@ struct Luccichio: View {
 
     var body: some View {
         Rectangle()
-            .fill(Color(white: acceso ? 0.17 : 0.10))
+            .fill(acceso ? Tinta.superficieAlta : Tinta.pozzo)
             .onAppear { withAnimation(.easeInOut(duration: 0.9).repeatForever()) { acceso = true } }
     }
 }
@@ -499,47 +602,55 @@ struct Riquadro: View {
     var scelto: Bool? = nil
     let tenuto: (Bool) -> Void
     @State private var immagine: UIImage?
+    @State private var visto = false
     @GestureState private var premuto = false
     @Environment(\.displayScale) private var scala
 
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
             if let immagine {
-                Color.black
+                Tinta.pozzo
                 let forma = misura
                 Image(uiImage: immagine).resizable().scaledToFill()
                     .frame(width: forma.width, height: forma.height).clipped()
                     .frame(width: lato, height: lato)
+                    .opacity(visto ? 1 : 0)
+                    .onAppear { withAnimation(Moto.passo) { visto = true } }
             } else {
                 Luccichio()
             }
             if scatto.video {
                 Text(Testi.durata(scatto.durataMs))
-                    .font(.caption2.weight(.semibold)).monospacedDigit()
-                    .foregroundStyle(.white).shadow(radius: 2).padding(4)
+                    .font(.system(size: 11, weight: .semibold)).monospacedDigit()
+                    .foregroundStyle(.white).shadow(color: .black.opacity(0.6), radius: 2).padding(5)
             } else if scatto.live, lato > 60 {
                 Image(systemName: "livephoto")
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(.white).shadow(radius: 2).padding(4)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.white).shadow(color: .black.opacity(0.6), radius: 2).padding(5)
             }
             if cuore, lato > 40 {
                 Image(systemName: "heart.fill")
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(.white).shadow(radius: 2).padding(4)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.white).shadow(color: .black.opacity(0.6), radius: 2).padding(5)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+                    .transition(.scale.combined(with: .opacity))
             }
             if let scelto {
-                if scelto { Color.white.opacity(0.22) }
+                if scelto { Tinta.accento.opacity(0.18) }
                 Image(systemName: scelto ? "checkmark.circle.fill" : "circle")
-                    .font(.title3)
+                    .font(.system(size: 21))
                     .symbolRenderingMode(scelto ? .palette : .monochrome)
-                    .foregroundStyle(.white, Color.accentColor)
-                    .shadow(radius: 2).padding(5)
+                    .foregroundStyle(.white, Tinta.arancio)
+                    .shadow(color: .black.opacity(0.4), radius: 2).padding(5)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                    .contentTransition(.symbolEffect(.replace))
             }
         }
         .frame(width: lato, height: lato)
-        .clipShape(RoundedRectangle(cornerRadius: 1))
+        .clipShape(RoundedRectangle(cornerRadius: lato > 60 ? 3 : 1, style: .continuous))
+        .scaleEffect(scelto == true ? 0.92 : 1)
+        .animation(Moto.molla, value: scelto)
+        .animation(Moto.molla, value: cuore)
         .contentShape(Rectangle())
         .simultaneousGesture(LongPressGesture(minimumDuration: 0.35)
             .sequenced(before: DragGesture(minimumDistance: 0))
@@ -549,6 +660,7 @@ struct Riquadro: View {
         .onChange(of: premuto) { _, si in tenuto(si) }
         .task(id: scatto.id) {
             immagine = Miniature.tutte.pronta(scatto.mini ?? scatto.posto)
+            if immagine != nil { visto = true }
             if immagine == nil {
                 immagine = await Miniature.tutte.carica(pacchetto, scatto.mini ?? scatto.posto, lato: lato * scala)
             }
@@ -573,7 +685,7 @@ struct Anteprima: View {
 
     var body: some View {
         ZStack {
-            Rectangle().fill(.black.opacity(0.6)).ignoresSafeArea()
+            Rectangle().fill(.ultraThinMaterial).ignoresSafeArea()
             if let immagine {
                 Image(uiImage: immagine)
                     .resizable()
@@ -585,8 +697,8 @@ struct Anteprima: View {
                                 .opacity(movimento.inCorso ? 1 : 0)
                         }
                     }
-                    .clipShape(RoundedRectangle(cornerRadius: 14))
-                    .shadow(radius: 20)
+                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .shadow(color: .black.opacity(0.35), radius: 24, y: 10)
                     .padding(24)
             }
         }
@@ -614,6 +726,52 @@ struct Anteprima: View {
     }
 }
 
+struct VoceImpostazione: View {
+    let nome: String
+    let valore: String
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+            Text(nome).font(.system(size: 15)).foregroundStyle(Tinta.tenue)
+            Spacer(minLength: 8)
+            Text(valore).font(.system(size: 15, weight: .medium)).foregroundStyle(Tinta.ink)
+                .multilineTextAlignment(.trailing)
+        }
+        .padding(.vertical, 11)
+    }
+}
+
+struct GruppoImpostazioni<Dentro: View>: View {
+    let titolo: String
+    var nota: String? = nil
+    @ViewBuilder var dentro: () -> Dentro
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(titolo.uppercased()).etichettaMaiuscola().padding(.horizontal, 4)
+            VStack(alignment: .leading, spacing: 0) { dentro() }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 4)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Tinta.fondo, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(Tinta.linea, lineWidth: 0.5))
+            if let nota {
+                Text(nota).font(.system(size: 12.5)).foregroundStyle(Tinta.tenue).padding(.horizontal, 4)
+            }
+        }
+    }
+}
+
+struct Spiegazione: View {
+    let testo: String
+
+    var body: some View {
+        Text(testo).font(.system(size: 14.5)).foregroundStyle(Tinta.attenuato)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.vertical, 11)
+    }
+}
+
 struct Impostazioni: View {
     let pacchetto: Pacchetto
     @AppStorage("visore.proporzioni") private var proporzioni = false
@@ -622,73 +780,81 @@ struct Impostazioni: View {
     @AppStorage(Giro.chiave) private var giroVisto = false
 
     var body: some View {
-        NavigationStack {
-            Form {
-                Section("Firma") {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 22) {
+                HStack {
+                    Text("Impostazioni").font(Carattere.titolo).foregroundStyle(Tinta.ink)
+                    Spacer()
+                    Button("Fine") { chiudi() }
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(Tinta.accento)
+                }
+                .padding(.top, 18)
+                GruppoImpostazioni(titolo: "Firma") {
                     if let scade = Firma.scadenza() {
-                        Text(Firma.aParole(fino: scade)).font(.headline)
+                        Text(Firma.aParole(fino: scade)).font(Carattere.piccolo).foregroundStyle(Tinta.ink)
+                            .padding(.top, 11)
                     }
-                    Text("Rinnovare la firma con AltStore non tocca niente. Cancellare l'app e rimetterla porta via "
-                         + "il pacchetto: andrebbe ricopiato tutto dal PC.")
-                        .font(.callout)
+                    Spiegazione(testo: "Si rinnova con AltStore, avviando AltServer sul portatile. Rinnovare non tocca niente. "
+                                + "Cancellare l'app e rimetterla porta via il pacchetto: andrebbe ricopiato tutto dal PC.")
                 }
-                Section {
-                    Toggle("Proporzioni vere", isOn: $proporzioni)
-                } header: {
-                    Text("Griglia")
-                } footer: {
-                    Text("Spento: miniature quadrate, piene. Acceso: ogni foto con la sua forma, dentro il suo quadrato.")
+                GruppoImpostazioni(titolo: "Griglia",
+                                   nota: "Spento: miniature quadrate, piene. Acceso: ogni foto con la sua forma, dentro il suo quadrato. "
+                                       + "Pizzica la griglia per vedere più foto o più grandi.") {
+                    Toggle(isOn: $proporzioni) { Text("Proporzioni vere").font(.system(size: 15)).foregroundStyle(Tinta.ink) }
+                        .tint(Tinta.accento)
+                        .padding(.vertical, 6)
                 }
-                Section("Blocco") {
-                    Text("Il Visore si chiude appena esci o cambi app, e al rientro chiede Face ID. "
-                         + "La password torna ogni 7 giorni, dopo un riavvio e dopo 5 Face ID falliti.")
-                        .font(.callout)
+                GruppoImpostazioni(titolo: "Blocco") {
+                    Spiegazione(testo: "Il Visore si chiude appena esci o cambi app, e al rientro chiede Face ID. "
+                                + "La password torna ogni 7 giorni, dopo un riavvio e dopo 5 Face ID falliti.")
                 }
-                Section("Riservatezza") {
-                    Text("Se lo schermo viene registrato o duplicato, il Visore si copre di nero. Negli screenshot "
-                         + "prova a uscire nero anche lui. È una difesa parziale: una seconda fotocamera la supera.")
-                        .font(.callout)
-                    Text("Il Visore non usa internet, non manda notifiche e non accetta le tastiere di altre app. "
-                         + "Chiede un solo permesso: la posizione mentre è aperto, per il diario.")
-                        .font(.callout)
+                GruppoImpostazioni(titolo: "Riservatezza") {
+                    Spiegazione(testo: "Se lo schermo viene registrato o duplicato, il Visore si copre. Negli screenshot "
+                                + "esce nero. È una difesa parziale: una seconda fotocamera la supera.")
+                    Divider().overlay(Tinta.linea)
+                    Spiegazione(testo: "Il Visore non usa internet, non manda notifiche e non accetta le tastiere di altre app. "
+                                + "Chiede un solo permesso: la posizione mentre è aperto, per il diario.")
+                    Divider().overlay(Tinta.linea)
                     if let dal = cassetto.diarioDal {
-                        LabeledContent("Diario dal", value: Testi.giorno(String(dal.prefix(10))))
+                        VoceImpostazione(nome: "Diario dal", valore: Testi.giorno(String(dal.prefix(10))))
                     } else {
-                        LabeledContent("Diario", value: "ancora vuoto")
+                        VoceImpostazione(nome: "Diario", valore: "ancora vuoto")
                     }
                 }
-                Section("Live photo") {
-                    Text("Tocca la foto: si muove una volta. Appoggia il dito e scendi piano: si muove finché tieni; "
-                         + "oltre un tratto resta accesa anche sulle foto dopo. Tocca di nuovo per spegnerla. "
-                         + "Giù di scatto chiude, su mostra i comandi e le informazioni.")
-                        .font(.callout)
+                GruppoImpostazioni(titolo: "Foto aperta") {
+                    Spiegazione(testo: "Un tocco nasconde e rimostra tutto. Tieni premuto su una live photo: si muove finché tieni. "
+                                + "Due tocchi mettono il cuore. In basso le miniature di prima e dopo: toccane una per saltarci. "
+                                + "Giù di scatto chiude, su mostra le informazioni.")
                 }
-                Section("Pacchetto") {
+                GruppoImpostazioni(titolo: "Pacchetto") {
                     let info = pacchetto.archivio.informazioni()
-                    LabeledContent("Foto e video", value: Testi.numero((try? pacchetto.archivio.quanti()) ?? 0))
-                    if let fatto = info["fatto_il"] { LabeledContent("Fatto il", value: Testi.istante(fatto)) }
+                    VoceImpostazione(nome: "Foto e video", valore: Testi.numero((try? pacchetto.archivio.quanti()) ?? 0))
+                    if let fatto = info["fatto_il"] { VoceImpostazione(nome: "Fatto il", valore: Testi.istante(fatto)) }
                     if let n = info["nuove_ultimo_travaso"], let quante = Int(n), quante > 0 {
-                        LabeledContent("Nuove nell'ultima copia", value: Testi.numero(quante))
+                        VoceImpostazione(nome: "Nuove nell'ultima copia", valore: Testi.numero(quante))
                     }
-                    if let v = info["versione_officina"] { LabeledContent("Officina", value: v) }
-                    LabeledContent("Visore", value: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "")
+                    if let v = info["versione_officina"] { VoceImpostazione(nome: "Officina", valore: v) }
+                    VoceImpostazione(nome: "Visore",
+                                     valore: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "")
                 }
-                Section {
-                    Button("Rivedi il giro di benvenuto") {
-                        chiudi()
-                        giroVisto = false
-                    }
+                Button("Rivedi il giro di benvenuto") {
+                    chiudi()
+                    giroVisto = false
                 }
-                Section("Licenze") {
-                    Text("SQLite: pubblico dominio. Crittografia: CryptoKit di Apple, compresa nel sistema. "
-                         + "Il resto del Visore è scritto per questo progetto e non usa librerie di altri.")
-                        .font(.callout)
+                .buttonStyle(TastoBordo())
+                GruppoImpostazioni(titolo: "Licenze") {
+                    Spiegazione(testo: "SQLite: pubblico dominio. Crittografia: CryptoKit di Apple, compresa nel sistema. "
+                                + "Carattere Source Serif 4: SIL Open Font License. "
+                                + "Il resto del Visore è scritto per questo progetto e non usa librerie di altri.")
                 }
             }
-            .navigationTitle("Impostazioni")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar { Button("Fine") { chiudi() } }
+            .padding(.horizontal, 18)
+            .padding(.bottom, 30)
+            .frame(maxWidth: 640)
+            .frame(maxWidth: .infinity)
         }
+        .scrollIndicators(.hidden)
     }
 }
 
@@ -702,29 +868,39 @@ struct BarraScelta: View {
     let finito: () -> Void
 
     var body: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: 6) {
             Button { cuore(!tuttiColCuore) } label: {
-                Image(systemName: tuttiColCuore ? "heart.slash" : "heart").font(.title3).padding(10)
+                Image(systemName: tuttiColCuore ? "heart.slash" : "heart")
+                    .font(.system(size: 18)).frame(width: 44, height: 44).contentShape(Circle())
             }
+            .buttonStyle(Premuto(quanto: 0.88))
             .accessibilityLabel(tuttiColCuore ? "Togli il cuore" : "Metti il cuore")
-            Spacer()
             Text(quante == 0 ? "Tocca le foto" : quante == 1 ? "1 scelta" : "\(Testi.numero(quante)) scelte")
-                .font(.subheadline.weight(.semibold)).monospacedDigit()
-            Spacer()
+                .font(.system(size: 14, weight: .semibold)).monospacedDigit()
+                .contentTransition(.numericText())
+                .frame(minWidth: 110)
             if raccolta != nil {
                 Button(role: .destructive, action: togli) {
-                    Image(systemName: "rectangle.stack.badge.minus").font(.title3).padding(10)
+                    Image(systemName: "rectangle.stack.badge.minus")
+                        .font(.system(size: 17)).frame(width: 44, height: 44).contentShape(Circle())
                 }
+                .buttonStyle(Premuto(quanto: 0.88))
                 .accessibilityLabel("Togli dalla raccolta")
             }
             MenuRaccolta(impronte: impronte, fatto: finito) {
-                Image(systemName: "rectangle.stack.badge.plus").font(.title3).padding(10)
+                Image(systemName: "rectangle.stack.badge.plus")
+                    .font(.system(size: 17)).frame(width: 44, height: 44).contentShape(Circle())
             }
             .accessibilityLabel("Aggiungi a una raccolta")
         }
+        .foregroundStyle(Tinta.ink)
         .disabled(quante == 0)
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
-        .background(.bar)
+        .padding(5)
+        .background(.regularMaterial, in: Capsule())
+        .overlay(Capsule().stroke(Tinta.lineaForte, lineWidth: 0.5))
+        .shadow(color: Tinta.ombra, radius: 18, y: 8)
+        .animation(Moto.passo, value: quante)
+        .padding(.bottom, 6)
+        .frame(maxWidth: .infinity)
     }
 }

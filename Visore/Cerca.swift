@@ -51,24 +51,9 @@ enum Frase {
     static func genere(_ g: String) -> String { generi.first { $0.id == g }?.nome ?? g }
 }
 
-struct Pillola: View {
-    let testo: String
-    let togli: () -> Void
-
-    var body: some View {
-        HStack(spacing: 6) {
-            Text(testo).lineLimit(1)
-            Button(action: togli) { Image(systemName: "xmark").font(.caption2.weight(.bold)) }
-                .accessibilityLabel("Togli \(testo)")
-        }
-        .font(.subheadline)
-        .padding(.leading, 12).padding(.trailing, 10).padding(.vertical, 7)
-        .background(Color(white: 0.18), in: Capsule())
-    }
-}
-
 struct Cerca: View {
     let pacchetto: Pacchetto
+    let chiudi: () -> Void
     @State private var testo = ""
     @State private var cercato = ""
     @State private var filtro = Filtro()
@@ -78,6 +63,7 @@ struct Cerca: View {
     @State private var persone: [Persona] = []
     @State private var scelta: Scelta?
     @State private var conParole = false
+    @FocusState private var dentro: Bool
 
     enum Scelta: String, Identifiable {
         case luogo, persona, nodo
@@ -92,29 +78,34 @@ struct Cerca: View {
 
     var body: some View {
         let f = completo
-        Group {
-            if f.vuoto {
-                inizio
-            } else {
-                GrigliaGiorni(pacchetto: pacchetto, filtro: f, testa: AnyView(testa(f)), vuota: nienteDa(f))
-                    .id(f)
+        VStack(spacing: 0) {
+            barra
+            if !filtro.vuoto { pilloleAttive }
+            Group {
+                if f.vuoto {
+                    inizio
+                } else {
+                    GrigliaGiorni(pacchetto: pacchetto, filtro: f, titolo: "Risultati",
+                                  sottotitolo: Frase.cerco(f.parole, conParole: conParole),
+                                  testa: AnyView(trovati), vuota: nienteDa(f), conIndietro: false)
+                        .id(f)
+                        .transition(.opacity)
+                }
             }
+            .frame(maxHeight: .infinity, alignment: .top)
         }
-        .navigationTitle("Cerca")
-        .navigationBarTitleDisplayMode(.inline)
-        .searchable(text: $testo, placement: .navigationBarDrawer(displayMode: .always),
-                    prompt: "Nodi, note, persone, luoghi, anni")
-        .autocorrectionDisabled()
-        .textInputAutocapitalization(.never)
-        .onSubmit(of: .search) { ricorda() }
+        .background(Tinta.fondo.ignoresSafeArea())
+        .senzaBarraDiSistema()
+        .animation(Moto.passo, value: f.vuoto)
+        .animation(Moto.passo, value: filtro)
         .task(id: testo) {
             try? await Task.sleep(for: .milliseconds(250))
             if !Task.isCancelled { cercato = testo }
         }
-        .toolbar { aggiungi }
         .sheet(item: $scelta) { s in
             NavigationStack { foglio(s) }
                 .presentationDetents([.medium, .large])
+                .foglioStile()
         }
         .onAppear {
             if anni.isEmpty {
@@ -123,108 +114,236 @@ struct Cerca: View {
                 persone = (try? pacchetto.archivio.persone()) ?? []
                 conParole = pacchetto.archivio.ciSonoParole()
             }
+            if filtro.vuoto, testo.isEmpty { dentro = true }
         }
+    }
+
+    private var barra: some View {
+        HStack(spacing: 10) {
+            HStack(spacing: 8) {
+                Image(systemName: "magnifyingglass").font(.system(size: 15, weight: .medium)).foregroundStyle(Tinta.tenue)
+                TextField("", text: $testo, prompt: Text("Nodi, note, persone, luoghi, anni").foregroundStyle(Tinta.tenue))
+                    .font(.system(size: 16))
+                    .foregroundStyle(Tinta.ink)
+                    .focused($dentro)
+                    .submitLabel(.search)
+                    .autocorrectionDisabled()
+                    .textInputAutocapitalization(.never)
+                    .onSubmit { ricorda() }
+                if !testo.isEmpty {
+                    Button {
+                        testo = ""
+                        cercato = ""
+                    } label: {
+                        Image(systemName: "xmark.circle.fill").font(.system(size: 16)).foregroundStyle(Tinta.tenue)
+                    }
+                    .buttonStyle(Premuto(quanto: 0.85))
+                    .accessibilityLabel("Svuota")
+                    .transition(.scale.combined(with: .opacity))
+                }
+            }
+            .padding(.horizontal, 14)
+            .frame(height: 42)
+            .background(Tinta.superficie, in: Capsule())
+            .overlay(Capsule().stroke(dentro ? Tinta.accento : Tinta.lineaForte, lineWidth: dentro ? 1 : 0.5))
+            .animation(Moto.gesto, value: dentro)
+            .animation(Moto.gesto, value: testo.isEmpty)
+            aggiungi
+            Button("Chiudi", action: chiudi)
+                .font(.system(size: 16, weight: .medium))
+                .foregroundStyle(Tinta.accento)
+                .buttonStyle(Premuto())
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 8)
+        .padding(.bottom, 8)
+    }
+
+    private var pilloleAttive: some View {
+        ScrollView(.horizontal) {
+            HStack(spacing: 6) {
+                ForEach(pillole) { p in
+                    Pillola(testo: p.testo, simbolo: p.simbolo, scelta: true, togli: p.togli)
+                        .transition(.scale.combined(with: .opacity))
+                }
+                Button("Togli tutto") { withAnimation(Moto.passo) { filtro = Filtro() } }
+                    .font(.system(size: 13.5, weight: .semibold))
+                    .foregroundStyle(Tinta.accento)
+                    .padding(.horizontal, 6)
+            }
+            .padding(.horizontal, 16)
+        }
+        .scrollIndicators(.hidden)
+        .padding(.bottom, 8)
     }
 
     private var inizio: some View {
-        List {
-            if !recenti.isEmpty {
-                Section {
-                    ForEach(recenti, id: \.self) { r in
-                        Button {
-                            testo = r
-                            cercato = r
-                        } label: {
-                            Label(r, systemImage: "clock.arrow.circlepath").foregroundStyle(.primary)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 22) {
+                if !recenti.isEmpty {
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Text("RICERCHE RECENTI").etichettaMaiuscola()
+                            Spacer()
+                            Button("Cancella") {
+                                Recenti.dimentica()
+                                withAnimation(Moto.passo) { recenti = [] }
+                            }
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(Tinta.accento)
                         }
-                    }
-                    .onDelete { righe in
-                        for i in righe { Recenti.togli(recenti[i]) }
-                        recenti = Recenti.tutte()
-                    }
-                } header: {
-                    HStack {
-                        Text("Ricerche recenti")
-                        Spacer()
-                        Button("Cancella") {
-                            Recenti.dimentica()
-                            recenti = []
+                        .padding(.horizontal, 4)
+                        Scheda {
+                            ForEach(Array(recenti.enumerated()), id: \.element) { i, r in
+                                if i > 0 { Separa(rientro: 46) }
+                                HStack(spacing: 12) {
+                                    Button {
+                                        testo = r
+                                        cercato = r
+                                        dentro = false
+                                    } label: {
+                                        HStack(spacing: 12) {
+                                            Image(systemName: "clock.arrow.circlepath").font(.system(size: 14))
+                                                .foregroundStyle(Tinta.tenue).frame(width: 20)
+                                            Text(r).font(.system(size: 15.5)).foregroundStyle(Tinta.ink).lineLimit(1)
+                                                .frame(maxWidth: .infinity, alignment: .leading)
+                                        }
+                                        .padding(.vertical, 12)
+                                        .contentShape(Rectangle())
+                                    }
+                                    .buttonStyle(Premuto(quanto: 0.98))
+                                    Button {
+                                        Recenti.togli(r)
+                                        withAnimation(Moto.passo) { recenti = Recenti.tutte() }
+                                    } label: {
+                                        Image(systemName: "xmark").font(.system(size: 11, weight: .bold))
+                                            .foregroundStyle(Tinta.tenue).frame(width: 30, height: 30).contentShape(Rectangle())
+                                    }
+                                    .buttonStyle(Premuto(quanto: 0.85))
+                                    .accessibilityLabel("Togli \(r)")
+                                }
+                                .padding(.horizontal, 14)
+                            }
                         }
-                        .font(.footnote)
                     }
                 }
+                if !anni.isEmpty {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("ANNI").etichettaMaiuscola().padding(.horizontal, 4)
+                        Fila(spazio: 6) {
+                            ForEach(anni) { a in
+                                Button { usa { $0.anno = a.anno } } label: { Pillola(testo: a.anno, simbolo: "calendar") }
+                                    .buttonStyle(Premuto())
+                            }
+                        }
+                    }
+                }
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("FILTRI").etichettaMaiuscola().padding(.horizontal, 4)
+                    Fila(spazio: 6) {
+                        ForEach(Frase.generi) { g in
+                            Button { usa { $0.genere = g.id } } label: { Pillola(testo: g.nome, simbolo: simbolo(g.id)) }
+                                .buttonStyle(Premuto())
+                        }
+                        if !luoghi.isEmpty {
+                            Button { scelta = .luogo } label: { Pillola(testo: "Luogo…", simbolo: "mappin.and.ellipse") }
+                                .buttonStyle(Premuto())
+                        }
+                        if !persone.isEmpty {
+                            Button { scelta = .persona } label: { Pillola(testo: "Persona…", simbolo: "person") }
+                                .buttonStyle(Premuto())
+                        }
+                        Button { scelta = .nodo } label: { Pillola(testo: "Nodo…", simbolo: "square.grid.2x2") }
+                            .buttonStyle(Premuto())
+                    }
+                }
+                Text("Scrivi una parola, oppure tocca un filtro. I filtri si sommano: si tolgono con la loro ×.")
+                    .font(.system(size: 13)).foregroundStyle(Tinta.tenue)
+                    .padding(.horizontal, 4)
             }
-            Section {
-                Text("Scrivi una parola, oppure aggiungi un filtro con il tasto in alto a destra: periodo, luogo, persona, nodo, tipo. I filtri si sommano.")
-                    .font(.footnote).foregroundStyle(.secondary)
-            }
+            .padding(.horizontal, 16)
+            .padding(.top, 8)
+            .padding(.bottom, 30)
+            .frame(maxWidth: 720)
+            .frame(maxWidth: .infinity)
+        }
+        .scrollIndicators(.hidden)
+        .scrollDismissesKeyboard(.immediately)
+    }
+
+    private func simbolo(_ genere: String) -> String {
+        switch genere {
+        case "live": return "livephoto"
+        case "video": return "video"
+        default: return "photo"
         }
     }
 
-    private func testa(_ f: Filtro) -> some View {
-        let trovati = try? pacchetto.archivio.trovati(cercato)
-        return VStack(alignment: .leading, spacing: 10) {
-            if let frase = Frase.cerco(f.parole, conParole: conParole) {
-                Text(frase).font(.footnote).foregroundStyle(.secondary)
-            }
-            if !filtro.vuoto {
-                ScrollView(.horizontal) {
-                    HStack(spacing: 8) {
-                        ForEach(pillole) { p in Pillola(testo: p.testo, togli: p.togli) }
-                        Button("Togli tutto") { withAnimation { filtro = Filtro() } }.font(.subheadline)
-                    }
+    @ViewBuilder
+    private var trovati: some View {
+        if let t = try? pacchetto.archivio.trovati(cercato), !t.vuoto {
+            Scheda {
+                let voci = vociDa(t)
+                ForEach(Array(voci.enumerated()), id: \.element.id) { i, v in
+                    if i > 0 { Separa(rientro: 58) }
+                    v.vista
                 }
-                .scrollIndicators(.hidden)
             }
-            if let trovati, !trovati.vuoto {
-                VStack(alignment: .leading, spacing: 0) {
-                    ForEach(trovati.persone) { p in
-                        NavigationLink(value: p) {
-                            Riga(icona: "person.crop.circle", testo: "\(p.nome) · \(Testi.foto(p.quanti))")
-                        }
-                    }
-                    ForEach(trovati.nodi) { n in
-                        NavigationLink(value: n) {
-                            Riga(icona: "square.stack", testo: "\(n.nome) · \(Testi.foto(n.quantiColRamo))")
-                        }
-                    }
-                    ForEach(trovati.luoghi) { l in
-                        Button { usa { $0.luogo = l.id } } label: {
-                            Riga(icona: "mappin.and.ellipse", testo: "\(l.nome) · \(Testi.foto(l.quanti))")
-                        }
-                    }
-                    ForEach(trovati.anni) { a in
-                        Button { usa { $0.anno = a.anno } } label: {
-                            Riga(icona: "calendar", testo: "\(a.anno) · \(Testi.foto(a.quanti))")
-                        }
-                    }
-                }
-                .buttonStyle(.plain)
-            }
+            .padding(.horizontal, 16)
+            .padding(.bottom, 6)
+            .frame(maxWidth: 720, alignment: .leading)
         }
-        .padding(.horizontal, 12)
-        .padding(.top, 8)
     }
 
-    private struct Riga: View {
-        let icona: String
-        let testo: String
+    private struct VoceTrovata: Identifiable {
+        let id: String
+        let vista: AnyView
+    }
+
+    private func vociDa(_ t: Trovati) -> [VoceTrovata] {
+        var v: [VoceTrovata] = []
+        for p in t.persone {
+            v.append(VoceTrovata(id: "p\(p.id)", vista: AnyView(NavigationLink(value: p) {
+                Riga(titolo: p.nome, sottotitolo: "Persona", numero: p.quanti) {
+                    Volto(pacchetto: pacchetto, persona: p, lato: 32)
+                }
+            }.buttonStyle(Premibile()))))
+        }
+        for n in t.nodi {
+            v.append(VoceTrovata(id: "n\(n.id)", vista: AnyView(NavigationLink(value: n) {
+                Riga(titolo: n.nome, sottotitolo: "Nodo", numero: n.quantiColRamo) {
+                    Copertina(pacchetto: pacchetto, nodo: n, lato: 32)
+                }
+            }.buttonStyle(Premibile()))))
+        }
+        for l in t.luoghi {
+            v.append(VoceTrovata(id: "l\(l.id)", vista: AnyView(Button { usa { $0.luogo = l.id } } label: {
+                Riga(titolo: l.nome, sottotitolo: "Luogo: aggiungi come filtro", numero: l.quanti) { Icona(simbolo: "mappin.and.ellipse") }
+            }.buttonStyle(Premibile()))))
+        }
+        for a in t.anni {
+            v.append(VoceTrovata(id: "a\(a.anno)", vista: AnyView(Button { usa { $0.anno = a.anno } } label: {
+                Riga(titolo: a.anno, sottotitolo: "Anno: aggiungi come filtro", numero: a.quanti) { Icona(simbolo: "calendar") }
+            }.buttonStyle(Premibile()))))
+        }
+        return v
+    }
+
+    private struct Icona: View {
+        let simbolo: String
 
         var body: some View {
-            HStack(spacing: 10) {
-                Image(systemName: icona).foregroundStyle(.secondary).frame(width: 22)
-                Text(testo).lineLimit(1)
-                Spacer()
-                Image(systemName: "chevron.right").font(.caption).foregroundStyle(.tertiary)
-            }
-            .padding(.vertical, 9)
-            .contentShape(Rectangle())
+            Image(systemName: simbolo).font(.system(size: 14, weight: .medium))
+                .foregroundStyle(Tinta.accento)
+                .frame(width: 32, height: 32)
+                .background(Tinta.alone, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
         }
     }
 
     struct Pill: Identifiable {
         let id: String
         let testo: String
+        let simbolo: String
         let togli: () -> Void
     }
 
@@ -232,20 +351,25 @@ struct Cerca: View {
         var uscita: [Pill] = []
         for id in filtro.persone {
             let nome = persone.first { $0.id == id }?.nome ?? (try? pacchetto.archivio.persona(id))?.nome ?? "?"
-            uscita.append(Pill(id: "persona-\(id)", testo: nome, togli: { withAnimation { filtro.persone.removeAll { $0 == id } } }))
+            uscita.append(Pill(id: "persona-\(id)", testo: nome, simbolo: "person",
+                               togli: { withAnimation(Moto.passo) { filtro.persone.removeAll { $0 == id } } }))
         }
         if let n = filtro.nodo {
             let nome = (try? pacchetto.archivio.nodo(n))?.nome ?? "?"
-            uscita.append(Pill(id: "nodo", testo: filtro.soloQui ? "\(nome) (solo qui)" : nome,
-                               togli: { withAnimation { filtro.nodo = nil; filtro.soloQui = false } }))
+            uscita.append(Pill(id: "nodo", testo: filtro.soloQui ? "\(nome) (solo qui)" : nome, simbolo: "square.grid.2x2",
+                               togli: { withAnimation(Moto.passo) { filtro.nodo = nil; filtro.soloQui = false } }))
         }
         if let l = filtro.luogo {
-            uscita.append(Pill(id: "luogo", testo: luoghi.first { $0.id == l }?.nome ?? "?",
-                               togli: { withAnimation { filtro.luogo = nil } }))
+            uscita.append(Pill(id: "luogo", testo: luoghi.first { $0.id == l }?.nome ?? "?", simbolo: "mappin.and.ellipse",
+                               togli: { withAnimation(Moto.passo) { filtro.luogo = nil } }))
         }
-        if let a = filtro.anno { uscita.append(Pill(id: "anno", testo: a, togli: { withAnimation { filtro.anno = nil } })) }
+        if let a = filtro.anno {
+            uscita.append(Pill(id: "anno", testo: a, simbolo: "calendar",
+                               togli: { withAnimation(Moto.passo) { filtro.anno = nil } }))
+        }
         if let g = filtro.genere {
-            uscita.append(Pill(id: "genere", testo: Frase.genere(g), togli: { withAnimation { filtro.genere = nil } }))
+            uscita.append(Pill(id: "genere", testo: Frase.genere(g), simbolo: simbolo(g),
+                               togli: { withAnimation(Moto.passo) { filtro.genere = nil } }))
         }
         return uscita
     }
@@ -263,7 +387,8 @@ struct Cerca: View {
     private func usa(_ cambia: (inout Filtro) -> Void) {
         ricorda()
         scelta = nil
-        withAnimation {
+        dentro = false
+        withAnimation(Moto.passo) {
             cambia(&filtro)
             testo = ""
             cercato = ""
@@ -291,7 +416,7 @@ struct Cerca: View {
                 }
             }
         } label: {
-            Image(systemName: "line.3.horizontal.decrease.circle")
+            FacciaTondo(simbolo: "line.3.horizontal.decrease")
         }
         .accessibilityLabel("Aggiungi un filtro")
     }
@@ -326,6 +451,25 @@ struct Voce: Identifiable {
     let quanti: Int
 }
 
+struct VoceScelta: View {
+    let nome: String
+    let quanti: Int
+    var simbolo: String? = nil
+
+    var body: some View {
+        HStack(spacing: 10) {
+            if let simbolo {
+                Image(systemName: simbolo).font(.system(size: 14)).foregroundStyle(Tinta.accento).frame(width: 22)
+            }
+            Text(nome).font(.system(size: 15.5)).foregroundStyle(Tinta.ink)
+                .lineLimit(2).frame(maxWidth: .infinity, alignment: .leading).layoutPriority(1)
+            Text(Testi.numero(quanti)).font(.system(size: 13)).foregroundStyle(Tinta.tenue).monospacedDigit()
+                .fixedSize()
+        }
+        .contentShape(Rectangle())
+    }
+}
+
 struct SceltaElenco: View {
     let titolo: String
     let voci: [Voce]
@@ -340,13 +484,12 @@ struct SceltaElenco: View {
                 scegli(v.id)
                 chiudi()
             } label: {
-                HStack {
-                    Text(v.nome).foregroundStyle(.primary)
-                    Spacer()
-                    Text(Testi.numero(v.quanti)).foregroundStyle(.secondary).monospacedDigit()
-                }
+                VoceScelta(nome: v.nome, quanti: v.quanti)
             }
+            .listRowBackground(Tinta.fondo)
         }
+        .scrollContentBackground(.hidden)
+        .background(Tinta.superficie)
         .searchable(text: $cerca)
         .navigationTitle(titolo)
         .navigationBarTitleDisplayMode(.inline)
@@ -373,26 +516,32 @@ struct SceltaNodo: View {
                 Button {
                     scegli(genitore)
                 } label: {
-                    Label("Tutto «\(genitore.nome)»", systemImage: "checkmark.circle")
+                    VoceScelta(nome: "Tutto «\(genitore.nome)»", quanti: genitore.quantiColRamo, simbolo: "checkmark.circle")
                 }
+                .listRowBackground(Tinta.fondo)
             }
             ForEach(nodi) { voce in
                 let nodo = voce.nodo
-                if voce.figli {
-                    NavigationLink {
-                        SceltaNodo(pacchetto: pacchetto, genitore: nodo, scegli: scegli)
-                    } label: {
-                        voceNodo(nodo)
-                    }
-                } else {
-                    Button {
-                        scegli(nodo)
-                    } label: {
-                        voceNodo(nodo).foregroundStyle(.primary)
+                Group {
+                    if voce.figli {
+                        NavigationLink {
+                            SceltaNodo(pacchetto: pacchetto, genitore: nodo, scegli: scegli)
+                        } label: {
+                            VoceScelta(nome: nodo.nome, quanti: nodo.quantiColRamo)
+                        }
+                    } else {
+                        Button {
+                            scegli(nodo)
+                        } label: {
+                            VoceScelta(nome: nodo.nome, quanti: nodo.quantiColRamo)
+                        }
                     }
                 }
+                .listRowBackground(Tinta.fondo)
             }
         }
+        .scrollContentBackground(.hidden)
+        .background(Tinta.superficie)
         .navigationTitle(genitore?.nome ?? "Nodo")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar { Button("Annulla") { chiudi() } }
@@ -400,14 +549,6 @@ struct SceltaNodo: View {
             guard nodi.isEmpty else { return }
             let figli = (try? pacchetto.archivio.nodi(figliDi: genitore?.id)) ?? []
             nodi = figli.map { Ramo(nodo: $0, figli: !((try? pacchetto.archivio.nodi(figliDi: $0.id)) ?? []).isEmpty) }
-        }
-    }
-
-    private func voceNodo(_ nodo: Nodo) -> some View {
-        HStack {
-            Text(nodo.nome)
-            Spacer()
-            Text(Testi.numero(nodo.quantiColRamo)).foregroundStyle(.secondary).monospacedDigit()
         }
     }
 }
