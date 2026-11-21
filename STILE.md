@@ -53,7 +53,8 @@ Si usano sempre questi. Non si scrivono colori, caratteri o tempi a mano nelle s
   dell'**ingranaggio (Impostazioni)**.
 - **Foto**: il titolo serif con il conteggio. Sotto ci sono le pillole «Raccolte», «Tutte» e
   gli anni. I giorni hanno l'intestazione serif con i luoghi. Si pizzica per cambiare le
-  colonne (1, 3, 5, 7). In orizzontale le colonne aumentano. Le miniature compaiono
+  colonne (1, 3, 5, 7): le colonne cambiano mentre pizzichi, con un'animazione e una piccola
+  vibrazione. Non si ingrandisce mai tutta la pagina. In orizzontale le colonne aumentano. Le miniature compaiono
   sfumando, e tenendo premuto se ne vede l'anteprima. A destra c'è la barra per correre
   fra gli anni.
 - **Foto aperta**, come l'app Foto di iPhone:

@@ -300,15 +300,16 @@ struct GrigliaGiorni: View {
                 }
                 .scrollIndicators(.hidden)
                 .segueLaTesta($compatta)
-                .scaleEffect(pizzico, anchor: .top)
                 .simultaneousGesture(MagnifyGesture()
-                    .onChanged { pizzico = min(1.4, max(0.7, $0.magnification)) }
-                    .onEnded { fine in
-                        withAnimation(.snappy) {
-                            cambiaColonne(fine.magnification)
-                            pizzico = 1
-                        }
-                    })
+                    .onChanged { v in
+                        let quanto = v.magnification / pizzico
+                        guard quanto > 1.2 || quanto < 0.83 else { return }
+                        let prima = colonne
+                        withAnimation(Moto.scena) { cambiaColonne(quanto) }
+                        if colonne != prima { pizzico = v.magnification }
+                    }
+                    .onEnded { _ in pizzico = 1 })
+                .sensoryFeedback(.selection, trigger: colonne)
                 .overlay(alignment: .trailing) {
                     BarraAnni(linea: linea) { i in vai(i, linea, proxy) }
                         .padding(.top, 120)
@@ -490,8 +491,8 @@ struct GrigliaGiorni: View {
 
     private func cambiaColonne(_ quanto: CGFloat) {
         guard let i = GrigliaGiorni.livelli.firstIndex(of: colonne) else { colonne = 3; return }
-        if quanto > 1.15, i > 0 { colonne = GrigliaGiorni.livelli[i - 1] }
-        if quanto < 0.85, i < GrigliaGiorni.livelli.count - 1 { colonne = GrigliaGiorni.livelli[i + 1] }
+        if quanto > 1.2, i > 0 { colonne = GrigliaGiorni.livelli[i - 1] }
+        if quanto < 0.83, i < GrigliaGiorni.livelli.count - 1 { colonne = GrigliaGiorni.livelli[i + 1] }
     }
 }
 
