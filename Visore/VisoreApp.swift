@@ -183,7 +183,7 @@ final class StatoVisore: ObservableObject {
                     self.occupato = false
                 }
             } catch {
-                await MainActor.run { self.errore = "La password della prova è: tre parole che ricordi"; self.occupato = false }
+                await MainActor.run { self.errore = "La password della prova è la frase «tre parole che ricordi», tutta minuscola e con gli spazi."; self.occupato = false }
             }
         }
     }
@@ -307,7 +307,7 @@ struct Sblocco: View {
                 .carta(12)
             }
             if prova {
-                Text("Prova con 5 foto finte. La password è: tre parole che ricordi")
+                Text("Prova con 5 foto finte. La password è già scritta: è la frase «tre parole che ricordi». Tocca Apri.")
                     .font(.system(size: 14)).foregroundStyle(Tinta.tenue).multilineTextAlignment(.center)
             } else if !Deposito.c_e || cartella != nil {
                 Button { scegli = true } label: {
@@ -356,6 +356,7 @@ struct Sblocco: View {
             if !Deposito.c_e {
                 Button(prova ? "Torna al mio pacchetto" : "Prova con le foto finte") {
                     withAnimation(Moto.passo) { prova.toggle() }
+                    password = prova ? "tre parole che ricordi" : ""
                 }
                 .font(.system(size: 14))
                 .foregroundStyle(Tinta.tenue)
