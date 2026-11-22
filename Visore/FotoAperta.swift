@@ -266,13 +266,10 @@ struct Pagina: View {
     @State private var inizioTocco: Date?
     @State private var modo: Modo?
     @State private var tenute = 0
-    @State private var passi = ""
 
     enum Modo { case chiudi, live, info, orizzontale, sposta }
-    @MainActor static var giri = 0
 
     var body: some View {
-        let _ = Pagina.giri += 1
         ZStack {
             let intera = grande ?? (scatto.video ? nil : Originali.tutti.pronto(scatto.posto))
             if let immagine = intera ?? piccola ?? Miniature.tutte.pronta(scatto.mini ?? scatto.posto) {
@@ -280,7 +277,6 @@ struct Pagina: View {
                     .resizable()
                     .allowedDynamicRange(intera != nil ? .high : .standard)
                     .scaledToFit()
-                    .accessibilityLabel(intera != nil ? "Foto intera" : "Foto piccola")
             }
             if (scatto.live || scatto.video), movimento.inCorso {
                 StratoVideo(lettore: movimento.lettore)
@@ -291,8 +287,6 @@ struct Pagina: View {
         .offset(spinta)
         .animation(Moto.passo, value: modo == .live)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("pagina \(scatto.id) \(passi) \(Pagina.giri)")
         .overlay { sopra }
         .contentShape(Rectangle())
         .simultaneousGesture(dito)
@@ -473,23 +467,19 @@ struct Pagina: View {
     }
 
     private func carica() async {
-        passi += "a"
         let mini = scatto.mini ?? scatto.posto
         piccola = Miniature.tutte.pronta(mini)
         if piccola == nil {
             piccola = await Miniature.tutte.carica(pacchetto, mini, lato: 600)
         }
-        passi += piccola == nil ? "P" : "p"
         if scatto.video {
             await movimento.prepara(pacchetto: pacchetto, posto: scatto.posto)
         } else {
             grande = Originali.tutti.pronto(scatto.posto)
             if grande == nil { grande = await Originali.tutti.carica(pacchetto, scatto.posto) }
             rotta = grande == nil
-            passi += rotta ? "G" : "g"
             if scatto.live, let m = scatto.postoMovimento {
                 await movimento.prepara(pacchetto: pacchetto, posto: m)
-                passi += "m"
             }
         }
         aggiorna(attiva: attiva)
