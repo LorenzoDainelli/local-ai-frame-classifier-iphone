@@ -72,9 +72,11 @@ Si usano sempre questi. Non si scrivono colori, caratteri o tempi a mano nelle s
 - **Foto**: il titolo serif con il conteggio. Sotto ci sono le pillole «Raccolte», «Tutte» e
   gli anni. Si pizzica come in Foto di iPhone: 1, 3, 5, 15 o 31 foto per riga. A 1, 3 e 5 i
   giorni hanno l'intestazione serif con i luoghi; a 15 si raggruppa per mese («Nov 2026»),
-  a 31 per anno («2026»). Mentre pizzichi la griglia segue le dita con un poco di elastico,
-  non scorre e non trema; al passo di livello ogni foto vola al suo posto nuovo con una molla
-  e la foto sotto le dita resta sotto le dita, con una piccola vibrazione. Ai bordi (1 e 31)
+  a 31 per anno («2026»). Mentre pizzichi non si ingrandisce mai la pagina: ogni foto si
+  sposta e cambia misura un poco alla volta fra il suo posto di prima e quello del livello
+  nuovo, seguendo le dita, e le intestazioni sfumano l'una nell'altra. La griglia non scorre e
+  non trema; la foto sotto le dita resta sotto le dita, al passo di livello c'è una piccola
+  vibrazione e, lasciate le dita, una molla finisce o annulla il passo. Ai bordi (1 e 31)
   l'elastico è duro. A 15 e 31, scorrendo, in alto a sinistra c'è la pillola di vetro col
   mese o l'anno, che cambia a ghigliottina (il nuovo spinge via il vecchio). Le miniature
   diventano più nitide quando si ingrandiscono; a 1 per riga si vede la foto vera. In
