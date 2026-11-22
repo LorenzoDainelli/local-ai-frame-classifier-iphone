@@ -289,7 +289,7 @@ struct Pagina: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .overlay { sopra }
         .contentShape(Rectangle())
-        .simultaneousGesture(dito)
+        .gesture(dito)
         .simultaneousGesture(pizzico)
         .sensoryFeedback(.impact(weight: .medium), trigger: tenute)
         .task(id: scatto.id) { await carica() }
@@ -359,71 +359,85 @@ struct Pagina: View {
         .ignoresSafeArea()
     }
 
-    private var dito: some Gesture {
-        DragGesture(minimumDistance: 0, coordinateSpace: .global)
-            .onChanged { v in
-                if inizioTocco == nil {
-                    inizioTocco = v.time
-                    if scatto.live, scala <= 1 { aspettaLaLive() }
-                }
-                let t = v.translation
-                if modo == nil, max(abs(t.width), abs(t.height)) > Gesti.primoMovimento {
-                    tieni?.cancel()
-                    modo = sceglie(t)
-                }
-                switch modo {
-                case .sposta:
-                    pan = CGSize(width: panPrima.width + t.width, height: panPrima.height + t.height)
-                case .chiudi:
-                    spostamento = t
-                    giu = max(0, t.height)
-                default:
-                    break
+    private var dito: Dito {
+        Dito(inizio: {
+            inizioTocco = Date()
+            if scatto.live, scala <= 1 { aspettaLaLive() }
+        }, decide: { t in
+            tieni?.cancel()
+            if modo == .live { return true }
+            modo = sceglie(t)
+            if modo == .orizzontale {
+                modo = nil
+                return false
+            }
+            return true
+        }, cambia: { t in
+            switch modo {
+            case .sposta:
+                pan = CGSize(width: panPrima.width + t.width, height: panPrima.height + t.height)
+            case .chiudi:
+                spostamento = t
+                giu = max(0, t.height)
+            default:
+                break
+            }
+        }, fine: { t, velocita, _ in
+            finito(t, velocita)
+        }, annulla: {
+            tieni?.cancel()
+            tieni = nil
+            if modo == .live { movimento.ferma() }
+            if modo == .chiudi { withAnimation(Moto.molla) { spostamento = .zero } }
+            if modo == .sposta { panPrima = pan }
+            inizioTocco = nil
+            modo = nil
+            giu = 0
+        })
+    }
+
+    private func finito(_ t: CGSize, _ velocita: CGSize) {
+        tieni?.cancel()
+        tieni = nil
+        defer {
+            inizioTocco = nil
+            modo = nil
+            giu = 0
+        }
+        let adesso = Date()
+        let durata = adesso.timeIntervalSince(inizioTocco ?? adesso)
+        switch modo {
+        case .none where durata < Gesti.tocco:
+            if let prima = ultimoTocco, adesso.timeIntervalSince(prima) < Gesti.doppio {
+                ultimoTocco = nil
+                attesa?.cancel()
+                attesa = nil
+                doppio()
+            } else {
+                ultimoTocco = adesso
+                attesa?.cancel()
+                attesa = Task { @MainActor in
+                    try? await Task.sleep(for: .seconds(Gesti.doppio))
+                    guard !Task.isCancelled else { return }
+                    ultimoTocco = nil
+                    withAnimation(Moto.passo) { controlli.toggle() }
                 }
             }
-            .onEnded { v in
-                tieni?.cancel()
-                tieni = nil
-                defer {
-                    inizioTocco = nil
-                    modo = nil
-                    giu = 0
-                }
-                let t = v.translation
-                let durata = v.time.timeIntervalSince(inizioTocco ?? v.time)
-                switch modo {
-                case .none where durata < Gesti.tocco:
-                    if let prima = ultimoTocco, v.time.timeIntervalSince(prima) < Gesti.doppio {
-                        ultimoTocco = nil
-                        attesa?.cancel()
-                        attesa = nil
-                        doppio()
-                    } else {
-                        ultimoTocco = v.time
-                        attesa?.cancel()
-                        attesa = Task { @MainActor in
-                            try? await Task.sleep(for: .seconds(Gesti.doppio))
-                            guard !Task.isCancelled else { return }
-                            ultimoTocco = nil
-                            withAnimation(Moto.passo) { controlli.toggle() }
-                        }
-                    }
-                case .chiudi?:
-                    if t.height > Gesti.chiudeDopo || v.velocity.height > Gesti.chiudeVeloce {
-                        chiudi()
-                    } else {
-                        withAnimation(Moto.molla) { spostamento = .zero }
-                    }
-                case .live?:
-                    movimento.ferma()
-                case .info?:
-                    if t.height < -40 { mostraInfo() }
-                case .sposta?:
-                    panPrima = pan
-                default:
-                    break
-                }
+        case .chiudi?:
+            if t.height > Gesti.chiudeDopo || velocita.height > Gesti.chiudeVeloce {
+                chiudi()
+            } else {
+                withAnimation(Moto.molla) { spostamento = .zero }
             }
+        case .live?:
+            movimento.ferma()
+        case .info?:
+            if t.height < -40 { mostraInfo() }
+        case .sposta?:
+            panPrima = pan
+        default:
+            break
+        }
     }
 
     private func aspettaLaLive() {
