@@ -59,6 +59,7 @@ struct FotoAperta: View {
     @State private var info: Scatto?
     @State private var ingrandita = false
     @State private var giu: CGFloat = 0
+    @State private var caricate = 0
 
     var body: some View {
         ZStack {
@@ -68,7 +69,7 @@ struct FotoAperta: View {
             ScrollView(.horizontal) {
                 LazyHStack(spacing: 0) {
                     ForEach(elenco.scatti) { s in
-                        Pagina(pacchetto: pacchetto, scatto: s, attiva: corrente == s.id,
+                        Pagina(pacchetto: pacchetto, scatto: s, attiva: corrente == s.id, caricate: caricate,
                                controlli: $controlli, ingrandita: $ingrandita, giu: $giu,
                                chiudi: { chiudi() }, mostraInfo: { info = s },
                                doppio: { doppioTocco(s) })
@@ -123,8 +124,9 @@ struct FotoAperta: View {
         .statusBarHidden(!controlli)
         .animation(Moto.passo, value: controlli)
         .onAppear {
-            if elenco.scatti.indices.contains(inizio) { corrente = elenco.scatti[inizio].id }
+            if corrente == nil, elenco.scatti.indices.contains(inizio) { corrente = elenco.scatti[inizio].id }
         }
+        .task(id: corrente) { await caricaIntorno(corrente) }
         .onChange(of: corrente) { _, nuovo in
             if let nuovo {
                 visto = nuovo
@@ -146,6 +148,23 @@ struct FotoAperta: View {
             _ = cassetto.cuore([s.impronta], acceso: true)
         }
         colpi += 1
+    }
+
+    private func caricaIntorno(_ id: Int64?) async {
+        guard let id, let i = elenco.scatti.firstIndex(where: { $0.id == id }) else { return }
+        for j in [i, i + 1, i - 1] where elenco.scatti.indices.contains(j) {
+            let s = elenco.scatti[j]
+            let mini = s.mini ?? s.posto
+            if Miniature.tutte.pronta(mini) == nil {
+                _ = await Miniature.tutte.carica(pacchetto, mini, lato: 600)
+                caricate += 1
+            }
+            if !s.video, Originali.tutti.pronto(s.posto) == nil {
+                _ = await Originali.tutti.carica(pacchetto, s.posto)
+                caricate += 1
+            }
+            guard !Task.isCancelled else { return }
+        }
     }
 
     private func prepara(intorno id: Int64?) {
@@ -224,6 +243,7 @@ struct Pagina: View {
     let pacchetto: Pacchetto
     let scatto: Scatto
     let attiva: Bool
+    var caricate = 0
     @Binding var controlli: Bool
     @Binding var ingrandita: Bool
     @Binding var giu: CGFloat
@@ -254,12 +274,13 @@ struct Pagina: View {
     var body: some View {
         let _ = Pagina.giri += 1
         ZStack {
-            if let immagine = grande ?? piccola {
+            let intera = grande ?? (scatto.video ? nil : Originali.tutti.pronto(scatto.posto))
+            if let immagine = intera ?? piccola ?? Miniature.tutte.pronta(scatto.mini ?? scatto.posto) {
                 Image(uiImage: immagine)
                     .resizable()
-                    .allowedDynamicRange(grande != nil ? .high : .standard)
+                    .allowedDynamicRange(intera != nil ? .high : .standard)
                     .scaledToFit()
-                    .accessibilityLabel(grande != nil ? "Foto intera" : "Foto piccola")
+                    .accessibilityLabel(intera != nil ? "Foto intera" : "Foto piccola")
             }
             if (scatto.live || scatto.video), movimento.inCorso {
                 StratoVideo(lettore: movimento.lettore)
@@ -415,6 +436,9 @@ struct Pagina: View {
         tieni?.cancel()
         tieni = Task { @MainActor in
             try? await Task.sleep(for: .seconds(Gesti.tieniPerLaLive))
+            if !movimento.pronto, scatto.live, let m = scatto.postoMovimento {
+                await movimento.prepara(pacchetto: pacchetto, posto: m)
+            }
             guard !Task.isCancelled, modo == nil, movimento.pronto else { return }
             modo = .live
             tenute += 1

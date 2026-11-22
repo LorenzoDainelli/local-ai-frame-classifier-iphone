@@ -124,5 +124,12 @@ final class GrigliaProve: XCTestCase {
             scatta("15-foto-\(n)")
             if n == 0 { descrivi("gerarchia-dopo-scorsa") }
         }
+        let striscia = app.scrollViews.element(boundBy: 1).images
+        if striscia.count > 2 {
+            striscia.element(boundBy: 2).tap()
+            sleep(2)
+            scatta("16-dalla-striscia")
+            descrivi("gerarchia-dalla-striscia")
+        }
     }
 }
