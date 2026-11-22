@@ -256,10 +256,10 @@ struct Pagina: View {
                     .resizable()
                     .allowedDynamicRange(grande != nil ? .high : .standard)
                     .scaledToFit()
+                    .accessibilityLabel(grande != nil ? "Foto intera" : "Foto piccola")
             }
-            if scatto.live || scatto.video {
+            if (scatto.live || scatto.video), movimento.inCorso {
                 StratoVideo(lettore: movimento.lettore)
-                    .opacity(movimento.inCorso ? 1 : 0)
                     .allowsHitTesting(false)
             }
         }

@@ -119,9 +119,10 @@ final class GrigliaProve: XCTestCase {
         scatta("14-foto-aperta")
         descrivi("gerarchia-foto-aperta")
         for n in 0..<4 {
-            app.swipeLeft()
+            app.scrollViews.firstMatch.swipeLeft(velocity: .fast)
             sleep(2)
             scatta("15-foto-\(n)")
+            if n == 0 { descrivi("gerarchia-dopo-scorsa") }
         }
     }
 }
