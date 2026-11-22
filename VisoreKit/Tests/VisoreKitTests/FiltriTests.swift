@@ -224,4 +224,59 @@ final class FiltriTests: XCTestCase {
     func testLePersoneInOrdineDiNome() throws {
         XCTAssertEqual(try archivio.personePerNome().map(\.nome), ["Anna Rossi", "Bruno", "Ossobuco"])
     }
+
+    func pescati(_ m: Mescola) throws -> Set<Int64> { Set(try archivio.pescati(mescola: m).map(\.id)) }
+
+    func testAcasoSenzaSceltePescaTutto() throws {
+        XCTAssertTrue(Mescola().tutto)
+        XCTAssertEqual(try pescati(Mescola()), [1, 2, 3, 4, 5, 6, 7, 8])
+        XCTAssertEqual(try archivio.quanti(mescola: Mescola()), 8)
+    }
+
+    func testAcasoITipiSiSommano() throws {
+        XCTAssertEqual(try pescati(Mescola(generi: ["video"])), [3, 8])
+        XCTAssertEqual(try pescati(Mescola(generi: ["foto", "video"])), [1, 3, 4, 5, 6, 7, 8])
+        XCTAssertEqual(try pescati(Mescola(generi: ["live", "video"])), [2, 3, 8])
+        XCTAssertFalse(Mescola(generi: ["foto"]).tutto)
+    }
+
+    func testAcasoINodiPrendonoIlRamoEBastaUno() throws {
+        XCTAssertEqual(try pescati(Mescola(nodi: [2])), [1, 4])
+        XCTAssertEqual(try pescati(Mescola(nodi: [2, 6])), [1, 3, 4])
+        XCTAssertEqual(try pescati(Mescola(nodi: [5])), [])
+    }
+
+    func testAcasoBastaUnaDellePersone() throws {
+        XCTAssertEqual(try pescati(Mescola(persone: [1, 2])), [1, 2, 3, 4])
+        XCTAssertEqual(try pescati(Mescola(persone: [4])), [7])
+    }
+
+    func testAcasoGliAnniLascianoFuoriISenzaData() throws {
+        XCTAssertEqual(try pescati(Mescola(anni: ["2019", "2020"])), [1, 2, 3])
+        XCTAssertEqual(try pescati(Mescola(generi: ["foto"], persone: [1])), [1, 4])
+        XCTAssertEqual(try pescati(Mescola(generi: ["video"], anni: ["2019"])), [])
+    }
+
+    func testAcasoIContiPerTipoNonGuardanoIlTipoScelto() throws {
+        XCTAssertEqual(try archivio.quantiPerGenere(mescola: Mescola()), ["foto": 5, "live": 1, "video": 2])
+        XCTAssertEqual(try archivio.quantiPerGenere(mescola: Mescola(generi: ["video"], persone: [1])),
+                       ["foto": 2, "live": 1, "video": 0])
+    }
+
+    func testAcasoGliScattiTornanoNellOrdineChiesto() throws {
+        XCTAssertEqual(try archivio.scatti(numeri: [4, 1, 3, 99]).map(\.id), [4, 1, 3])
+        XCTAssertEqual(try archivio.scatti(numeri: []).map(\.id), [])
+        XCTAssertEqual(try archivio.pescati(mescola: Mescola(generi: ["live"])).map(\.impronta), ["b"])
+    }
+
+    func testAcasoRimescolaEUnaPermutazioneRipetibile() {
+        let numeri = Array(1...50)
+        let a = Mescola.rimescola(numeri, seme: 7)
+        XCTAssertEqual(a, Mescola.rimescola(numeri, seme: 7))
+        XCTAssertNotEqual(a, Mescola.rimescola(numeri, seme: 8))
+        XCTAssertNotEqual(a, numeri)
+        XCTAssertEqual(a.sorted(), numeri)
+        XCTAssertEqual(Mescola.rimescola([Int](), seme: 1), [])
+        XCTAssertEqual(Mescola.rimescola([3], seme: 1), [3])
+    }
 }

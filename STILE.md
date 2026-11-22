@@ -52,7 +52,17 @@ Si usano sempre questi. Non si scrivono colori, caratteri o tempi a mano nelle s
   arancio scivola sulla sezione scelta. Toccare di nuovo la sezione in cui sei riporta alla
   prima pagina o in cima. Durante «Scegli» la barra sparisce.
 - **In alto a destra**, in ogni pagina principale: la **lente (Cerca)** a sinistra
-  dell'**ingranaggio (Impostazioni)**.
+  dell'**ingranaggio (Impostazioni)**, e subito a destra il tasto **A caso**: tondo arancio
+  pieno di 44 pt con le due frecce che si incrociano, 2 pt più staccato degli altri. È
+  l'unico tasto colorato della testata. Il primo giorno ha un anello che pulsa piano.
+- **A caso** (bozza A scelta): il tasto apre un foglio con il tipo di scatto (Foto, Live,
+  Video: si accendono anche insieme, almeno uno resta acceso), i nodi, le persone, gli anni,
+  tre interruttori (prima i preferiti, audio dei video, ricomincia alla fine) e il ritmo
+  (3, 5 o 8 secondi). In fondo il numero di scatti corre verso quello nuovo e il tasto
+  «Mescola e guarda» parte. La mostra è nera, a tutto schermo, come le storie: barre in
+  alto a gruppi di dieci, tocco a destra avanti, a sinistra indietro, al centro nasconde i
+  comandi, tenere premuto ferma, due tocchi mettono il cuore, giù chiude. Le foto si muovono
+  piano, i video e le Live partono da soli, l'audio sale piano.
 - **Foto**: il titolo serif con il conteggio. Sotto ci sono le pillole «Raccolte», «Tutte» e
   gli anni. I giorni hanno l'intestazione serif con i luoghi. Si pizzica per cambiare le
   colonne (1, 3, 5, 7): le colonne cambiano mentre pizzichi, con un'animazione e una piccola

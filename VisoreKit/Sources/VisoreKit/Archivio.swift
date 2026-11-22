@@ -533,3 +533,111 @@ public final class Archivio {
         return uscita
     }
 }
+
+public struct Mescola: Hashable {
+    public static let generiTutti = ["foto", "live", "video"]
+
+    public var generi: Set<String>
+    public var nodi: Set<Int64>
+    public var persone: Set<Int64>
+    public var anni: Set<String>
+
+    public init(generi: Set<String> = Set(Mescola.generiTutti), nodi: Set<Int64> = [], persone: Set<Int64> = [],
+                anni: Set<String> = []) {
+        self.generi = generi
+        self.nodi = nodi
+        self.persone = persone
+        self.anni = anni
+    }
+
+    public var tutto: Bool {
+        generi.count == Mescola.generiTutti.count && nodi.isEmpty && persone.isEmpty && anni.isEmpty
+    }
+
+    public static func rimescola<T>(_ elenco: [T], seme: UInt64) -> [T] {
+        var uscita = elenco
+        var stato = seme
+        func prossimo() -> UInt64 {
+            stato &+= 0x9E37_79B9_7F4A_7C15
+            var z = stato
+            z = (z ^ (z >> 30)) &* 0xBF58_476D_1CE4_E5B9
+            z = (z ^ (z >> 27)) &* 0x94D0_49BB_1331_11EB
+            return z ^ (z >> 31)
+        }
+        guard uscita.count > 1 else { return uscita }
+        for i in stride(from: uscita.count - 1, to: 0, by: -1) {
+            let j = Int(prossimo() % UInt64(i + 1))
+            uscita.swapAt(i, j)
+        }
+        return uscita
+    }
+}
+
+public struct Pescato: Hashable {
+    public let id: Int64
+    public let impronta: String
+}
+
+extension Archivio {
+
+    static func elenco(_ valori: [Any]) -> String {
+        (try? JSONSerialization.data(withJSONObject: valori)).flatMap { String(data: $0, encoding: .utf8) } ?? "[]"
+    }
+
+    static func condizioni(_ m: Mescola, conGeneri: Bool = true) -> (String, [Any]) {
+        var parti: [String] = []
+        var legami: [Any] = []
+        if conGeneri, m.generi.count < Mescola.generiTutti.count {
+            parti.append("s.genere IN (SELECT value FROM json_each(?))")
+            legami.append(elenco(m.generi.sorted()))
+        }
+        if !m.nodi.isEmpty {
+            parti.append("""
+            s.id IN (SELECT scatto_id FROM etichette WHERE nodo_id IN (
+              WITH RECURSIVE ramo(id) AS (SELECT value FROM json_each(?) UNION SELECT n.id FROM nodi n JOIN ramo r ON n.genitore_id = r.id)
+              SELECT id FROM ramo))
+            """)
+            legami.append(elenco(m.nodi.sorted().map { NSNumber(value: $0) }))
+        }
+        if !m.persone.isEmpty {
+            parti.append("s.id IN (SELECT scatto_id FROM persone_negli_scatti WHERE persona_id IN (SELECT value FROM json_each(?)))")
+            legami.append(elenco(m.persone.sorted().map { NSNumber(value: $0) }))
+        }
+        if !m.anni.isEmpty {
+            parti.append("substr(s.giorno, 1, 4) IN (SELECT value FROM json_each(?))")
+            legami.append(elenco(m.anni.sorted()))
+        }
+        return (parti.isEmpty ? "" : "WHERE " + parti.joined(separator: " AND "), legami)
+    }
+
+    public func quanti(mescola: Mescola) throws -> Int {
+        let (dove, legami) = Archivio.condizioni(mescola)
+        return try righe("SELECT count(*) FROM scatti s \(dove)", legami) { Int($0.intero(0) ?? 0) }.first ?? 0
+    }
+
+    public func quantiPerGenere(mescola: Mescola) throws -> [String: Int] {
+        let (dove, legami) = Archivio.condizioni(mescola, conGeneri: false)
+        var conti: [String: Int] = [:]
+        for g in Mescola.generiTutti { conti[g] = 0 }
+        let sql = "SELECT s.genere, count(*) FROM scatti s \(dove) GROUP BY s.genere"
+        for (g, n) in try righe(sql, legami, { ($0.testo(0) ?? "", Int($0.intero(1) ?? 0)) }) {
+            conti[g] = n
+        }
+        return conti
+    }
+
+    public func pescati(mescola: Mescola) throws -> [Pescato] {
+        let (dove, legami) = Archivio.condizioni(mescola)
+        return try righe("SELECT s.id, s.impronta FROM scatti s \(dove) ORDER BY s.id", legami) { r in
+            Pescato(id: r.intero(0)!, impronta: r.testo(1) ?? "")
+        }
+    }
+
+    public func scatti(numeri: [Int64]) throws -> [Scatto] {
+        guard !numeri.isEmpty else { return [] }
+        let sql = "SELECT \(campiScatto) \(daScatti) WHERE s.id IN (SELECT value FROM json_each(?))"
+        let trovati = try righe(sql, [Archivio.elenco(numeri.map { NSNumber(value: $0) })], Archivio.scatto)
+        let perNumero = Dictionary(trovati.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        return numeri.compactMap { perNumero[$0] }
+    }
+}

@@ -828,6 +828,12 @@ struct Impostazioni: View {
                                 + "Due tocchi mettono il cuore. In basso le miniature di prima e dopo: toccane una per saltarci. "
                                 + "Giù di scatto chiude, su mostra le informazioni.")
                 }
+                GruppoImpostazioni(titolo: "A caso") {
+                    Spiegazione(testo: "Il tasto arancio con le frecce, accanto all'ingranaggio, mescola foto, Live e video. "
+                                + "Scegli tipo, nodi, persone e anni, poi guarda. Tocca a destra o a sinistra per andare "
+                                + "avanti o indietro, al centro per nascondere i comandi. Tieni premuto per fermare, "
+                                + "due tocchi mettono il cuore, giù chiude.")
+                }
                 GruppoImpostazioni(titolo: "Pacchetto") {
                     let info = pacchetto.archivio.informazioni()
                     VoceImpostazione(nome: "Foto e video", valore: Testi.numero((try? pacchetto.archivio.quanti()) ?? 0))

@@ -497,6 +497,10 @@ final class Interfaccia: ObservableObject {
     @Published var scegliendo = false
     @Published var impostazioni = false
     @Published var cerca = false
+    @Published var casuale = false
+    @Published var giroCasuale: GiroCasuale?
+    var ricetta = Ricetta()
+    var inAttesa: GiroCasuale?
 }
 
 struct BarraPillola: View {
@@ -586,6 +590,22 @@ struct Galleria: View {
         .sheet(isPresented: $interfaccia.impostazioni) {
             Impostazioni(pacchetto: pacchetto).environmentObject(cassetto).foglioStile()
         }
+        .sheet(isPresented: $interfaccia.casuale, onDismiss: {
+            guard let g = interfaccia.inAttesa else { return }
+            interfaccia.inAttesa = nil
+            interfaccia.giroCasuale = g
+        }) {
+            SceltaCasuale(pacchetto: pacchetto, iniziale: interfaccia.ricetta) { r in
+                interfaccia.ricetta = r
+                interfaccia.inAttesa = GiroCasuale(ricetta: r)
+            }
+            .foglioStile()
+        }
+        .fullScreenCover(item: $interfaccia.giroCasuale) { g in
+            MostraCasuale(pacchetto: pacchetto, ricetta: g.ricetta)
+                .environmentObject(cassetto)
+                .environmentObject(interfaccia)
+        }
         .fullScreenCover(isPresented: $interfaccia.cerca) {
             NavigationStack {
                 Cerca(pacchetto: pacchetto, chiudi: { interfaccia.cerca = false })
@@ -632,6 +652,8 @@ struct AzioniDiTesta: View {
         HStack(spacing: 8) {
             Tondo(simbolo: "magnifyingglass", etichetta: "Cerca") { interfaccia.cerca = true }
             Tondo(simbolo: "gearshape", etichetta: "Impostazioni") { interfaccia.impostazioni = true }
+            TastoCasuale { interfaccia.casuale = true }
+                .padding(.leading, 2)
         }
     }
 }
