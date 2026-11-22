@@ -1,0 +1,43 @@
+name: Prova la griglia sul simulatore
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  simulatore:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+      - name: Xcode 26
+        run: |
+          ultimo=$(ls -d /Applications/Xcode_26*.app | grep -vi -e beta -e rc | sort -V | tail -1)
+          sudo xcode-select -s "$ultimo"
+          xcodebuild -version
+      - name: Pacchetto di prova
+        run: |
+          python3 -m venv /tmp/py
+          /tmp/py/bin/pip install --quiet pillow
+          /tmp/py/bin/python strumenti/prepara.py
+      - name: Progetto
+        run: |
+          brew install xcodegen
+          xcodegen generate
+      - name: Prove sul simulatore
+        run: |
+          id=$(xcrun simctl list devices available -j | python3 -c "import json,sys; d=json.load(sys.stdin)['devices']; v=[x for k in sorted(d, reverse=True) if 'iOS' in k for x in d[k] if x['name'].startswith('iPhone') and 'Pro' in x['name'] and 'Max' not in x['name']]; print(v[0]['udid'])")
+          echo "Simulatore $id"
+          xcodebuild test -project Visore.xcodeproj -scheme Visore -destination "id=$id" \
+            -resultBundlePath prove.xcresult CODE_SIGNING_ALLOWED=NO
+      - name: Schermate
+        if: always()
+        run: |
+          mkdir -p schermate
+          xcrun xcresulttool export attachments --path prove.xcresult --output-path schermate || true
+          ls -la schermate
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: schermate
+          path: schermate

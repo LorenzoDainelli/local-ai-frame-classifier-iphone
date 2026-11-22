@@ -38,3 +38,23 @@ targets:
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         MARKETING_VERSION: "3.0"
         CURRENT_PROJECT_VERSION: "3"
+  VisoreProve:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: VisoreProve
+    dependencies:
+      - target: Visore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: local.visore.prove
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_TARGET_NAME: Visore
+schemes:
+  Visore:
+    build:
+      targets:
+        Visore: all
+    test:
+      targets:
+        - VisoreProve
