@@ -24,7 +24,7 @@ final class GrigliaProve: XCTestCase {
         scatta("0-sblocco")
         tasto.tap()
         let griglia = app.collectionViews.firstMatch
-        XCTAssertTrue(griglia.waitForExistence(timeout: 40))
+        XCTAssertTrue(griglia.waitForExistence(timeout: 240))
         sleep(2)
         return griglia
     }

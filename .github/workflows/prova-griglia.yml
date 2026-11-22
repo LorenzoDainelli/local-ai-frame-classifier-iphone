@@ -28,7 +28,7 @@ jobs:
         run: |
           id=$(xcrun simctl list devices available -j | python3 -c "import json,sys; d=json.load(sys.stdin)['devices']; v=[x for k in sorted(d, reverse=True) if 'iOS' in k for x in d[k] if x['name'].startswith('iPhone') and 'Pro' in x['name'] and 'Max' not in x['name']]; print(v[0]['udid'])")
           echo "Simulatore $id"
-          xcodebuild test -project Visore.xcodeproj -scheme Visore -destination "id=$id" \
+          xcodebuild test -project Visore.xcodeproj -scheme Visore -configuration Release -destination "id=$id" \
             -resultBundlePath prove.xcresult CODE_SIGNING_ALLOWED=NO 2>&1 | tee prove.log | grep -E "error|failed|passed|Test Case|XCTAssert|crash|Fatal" || true
           grep -q "TEST SUCCEEDED" prove.log
       - name: Schermate
