@@ -923,7 +923,10 @@ final class GrigliaController: UIViewController, UICollectionViewDataSource, UIC
     private func apri(_ i: Int) {
         guard presentedViewController == nil, let contenuto = dati.azioni.apri(i) else { return }
         visto = scatti[i].id
-        let ospite = Ospite(rootView: contenuto)
+        let bordi = view.window?.safeAreaInsets ?? Gesti.bordi
+        let ospite = Ospite(rootView: AnyView(contenuto.safeAreaPadding(
+            EdgeInsets(top: bordi.top, leading: bordi.left, bottom: bordi.bottom, trailing: bordi.right))))
+        ospite.safeAreaRegions = []
         ospite.modalPresentationStyle = .fullScreen
         ospite.chiuso = { [weak self] in self?.dati.azioni.aperto(false) }
         let opzioni = UIViewController.Transition.ZoomOptions()
