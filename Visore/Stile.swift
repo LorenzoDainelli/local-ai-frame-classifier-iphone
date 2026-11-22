@@ -59,6 +59,7 @@ enum Moto {
     static let scena = Animation.timingCurve(0.2, 0.8, 0.2, 1, duration: 0.36)
     static let molla = Animation.spring(duration: 0.34, bounce: 0.28)
     static let foglio = Animation.spring(duration: 0.42, bounce: 0.12)
+    static let zoom = Animation.spring(duration: 0.42, bounce: 0.08)
 }
 
 struct Premuto: ButtonStyle {
@@ -131,6 +132,7 @@ struct Pillola: View {
         .background(scelta ? Tinta.alone : Color.clear, in: Capsule())
         .overlay(Capsule().stroke(scelta ? Color.clear : Tinta.lineaForte, lineWidth: 0.5))
         .contentShape(Capsule())
+        .fixedSize()
         .animation(Moto.gesto, value: scelta)
     }
 }
@@ -142,13 +144,7 @@ struct Tondo: View {
 
     var body: some View {
         Button(action: azione) {
-            Image(systemName: simbolo)
-                .font(.system(size: 15, weight: .medium))
-                .foregroundStyle(Tinta.attenuato)
-                .frame(width: 38, height: 38)
-                .background(Tinta.superficie, in: Circle())
-                .overlay(Circle().stroke(Tinta.lineaForte, lineWidth: 0.5))
-                .contentShape(Circle())
+            FacciaTondo(simbolo: simbolo)
         }
         .buttonStyle(Premuto(quanto: 0.9))
         .accessibilityLabel(etichetta)
@@ -169,7 +165,7 @@ struct Vetrino: View {
                 .contentTransition(.symbolEffect(.replace))
                 .symbolEffect(.bounce, value: acceso)
                 .frame(width: 44, height: 44)
-                .background(.ultraThinMaterial, in: Circle())
+                .vetro(Circle(), interattivo: true, ripiego: .ultraThinMaterial, bordo: false)
                 .environment(\.colorScheme, .dark)
                 .contentShape(Circle())
         }
@@ -228,6 +224,8 @@ struct Testa<Azioni: View>: View {
                     .minimumScaleFactor(0.8)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 azioni()
+                    .fixedSize()
+                    .layoutPriority(1)
             }
             if let sottotitolo {
                 Text(sottotitolo).font(Carattere.minore).foregroundStyle(Tinta.tenue).lineLimit(2)
@@ -262,7 +260,23 @@ struct TestaCompatta<Azioni: View>: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
-        .background {
+        .background { FondoTesta() }
+    }
+}
+
+struct FondoTesta: View {
+    @AppStorage(Vetro.chiave) private var vetro = true
+
+    var body: some View {
+        if Vetro.vero(vetro) {
+            Rectangle().fill(.ultraThinMaterial)
+                .mask(LinearGradient(stops: [.init(color: .black, location: 0), .init(color: .black, location: 0.55),
+                                             .init(color: .clear, location: 1)],
+                                     startPoint: .top, endPoint: .bottom))
+                .padding(.bottom, -18)
+                .ignoresSafeArea(edges: .top)
+                .allowsHitTesting(false)
+        } else {
             Rectangle().fill(.bar)
                 .overlay(alignment: .bottom) { Rectangle().fill(Tinta.linea).frame(height: 0.5) }
                 .ignoresSafeArea(edges: .top)
@@ -339,9 +353,7 @@ struct AvvisoPillola: View {
         .padding(.leading, 7)
         .padding(.trailing, 16)
         .padding(.vertical, 7)
-        .background(Tinta.superficie, in: Capsule())
-        .overlay(Capsule().stroke(Tinta.lineaForte, lineWidth: 0.5))
-        .shadow(color: Tinta.ombra, radius: 14, y: 6)
+        .vetro(Capsule(), ombra: true)
         .padding(.horizontal, 24)
     }
 }
@@ -449,7 +461,7 @@ struct FacciaVetrino: View {
             .font(.system(size: 17, weight: .medium))
             .foregroundStyle(Tinta.carta)
             .frame(width: 44, height: 44)
-            .background(.ultraThinMaterial, in: Circle())
+            .vetro(Circle(), interattivo: true, ripiego: .ultraThinMaterial, bordo: false)
             .environment(\.colorScheme, .dark)
             .contentShape(Circle())
     }
@@ -463,8 +475,7 @@ struct FacciaTondo: View {
             .font(.system(size: 15, weight: .medium))
             .foregroundStyle(Tinta.attenuato)
             .frame(width: 38, height: 38)
-            .background(Tinta.superficie, in: Circle())
-            .overlay(Circle().stroke(Tinta.lineaForte, lineWidth: 0.5))
+            .vetro(Circle(), interattivo: true)
             .contentShape(Circle())
     }
 }
@@ -530,5 +541,65 @@ struct Premibile: ButtonStyle {
         configuration.label
             .background(configuration.isPressed ? Tinta.superficieAlta : Color.clear)
             .animation(Moto.gesto, value: configuration.isPressed)
+    }
+}
+
+enum Vetro {
+    static let chiave = "visore.vetro"
+
+    static func vero(_ scelto: Bool) -> Bool {
+        guard scelto, !UIAccessibility.isReduceTransparencyEnabled else { return false }
+        if #available(iOS 26.0, *) { return true }
+        return false
+    }
+}
+
+struct ConVetro<Forma: Shape>: ViewModifier {
+    let forma: Forma
+    var tinta: Color?
+    var interattivo: Bool
+    var ripiego: AnyShapeStyle
+    var bordo: Bool
+    var ombra: Bool
+    @AppStorage(Vetro.chiave) private var scelto = true
+    @Environment(\.accessibilityReduceTransparency) private var poca
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if #available(iOS 26.0, *), scelto, !poca {
+            content.glassEffect(Glass.regular.tint(tinta).interactive(interattivo), in: forma)
+        } else {
+            content
+                .background(ripiego, in: forma)
+                .overlay { if bordo { forma.stroke(Tinta.lineaForte, lineWidth: 0.5) } }
+                .shadow(color: ombra ? Tinta.ombra : .clear, radius: ombra ? 16 : 0, y: ombra ? 7 : 0)
+        }
+    }
+}
+
+struct GruppoDiVetro<Dentro: View>: View {
+    var spazio: CGFloat = 8
+    @ViewBuilder var dentro: () -> Dentro
+    @AppStorage(Vetro.chiave) private var scelto = true
+
+    var body: some View {
+        if #available(iOS 26.0, *), scelto {
+            GlassEffectContainer(spacing: spazio) { dentro() }
+        } else {
+            dentro()
+        }
+    }
+}
+
+extension View {
+    func vetro<F: Shape, S: ShapeStyle>(_ forma: F, tinta: Color? = nil, interattivo: Bool = false,
+                                        ripiego: S, bordo: Bool = true, ombra: Bool = false) -> some View {
+        modifier(ConVetro(forma: forma, tinta: tinta, interattivo: interattivo, ripiego: AnyShapeStyle(ripiego),
+                          bordo: bordo, ombra: ombra))
+    }
+
+    func vetro<F: Shape>(_ forma: F, tinta: Color? = nil, interattivo: Bool = false,
+                         bordo: Bool = true, ombra: Bool = false) -> some View {
+        vetro(forma, tinta: tinta, interattivo: interattivo, ripiego: Tinta.superficie, bordo: bordo, ombra: ombra)
     }
 }

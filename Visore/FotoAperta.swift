@@ -307,7 +307,7 @@ struct Pagina: View {
                 .foregroundStyle(movimento.inCorso ? Tinta.arancio : Tinta.carta)
                 .padding(.horizontal, 10)
                 .frame(height: 26)
-                .background(.ultraThinMaterial, in: Capsule())
+                .vetro(Capsule(), ripiego: .ultraThinMaterial, bordo: false)
                 .environment(\.colorScheme, .dark)
                 .padding(.top, Gesti.sottoLaTesta)
                 .padding(.leading, 16)
@@ -320,7 +320,7 @@ struct Pagina: View {
                                   : "Questa foto non si apre qui: resta la miniatura.")
                     .font(.system(size: 13)).foregroundStyle(Tinta.carta)
                     .padding(.horizontal, 14).padding(.vertical, 8)
-                    .background(.ultraThinMaterial, in: Capsule())
+                    .vetro(Capsule(), ripiego: .ultraThinMaterial, bordo: false)
                     .environment(\.colorScheme, .dark)
                     .padding(.bottom, Gesti.sopraLaBarra + 12)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
@@ -519,7 +519,8 @@ struct ComandiVideo: View {
         .padding(.horizontal, 14)
         .padding(.top, 8)
         .padding(.bottom, 4)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .vetro(RoundedRectangle(cornerRadius: 18, style: .continuous), interattivo: true,
+               ripiego: .ultraThinMaterial, bordo: false)
         .environment(\.colorScheme, .dark)
         .frame(maxWidth: 560)
     }

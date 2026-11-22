@@ -139,12 +139,7 @@ struct TastoCasuale: View {
                 .rotation3DEffect(.degrees(Double(giri) * 360), axis: (x: 0, y: 1, z: 0))
                 .animation(piano ? nil : .spring(duration: 0.5, bounce: 0.35), value: giri)
                 .frame(width: lato, height: lato)
-                .background {
-                    Circle().fill(Tinta.arancio)
-                        .overlay(Circle().fill(LinearGradient(colors: [.white.opacity(0.22), .clear],
-                                                              startPoint: .top, endPoint: .center)))
-                        .shadow(color: Tinta.arancio.opacity(0.45), radius: 8, y: 4)
-                }
+                .modifier(FondoArancio())
                 .overlay {
                     if !visto, !piano {
                         Circle().stroke(Tinta.arancio, lineWidth: 2)
@@ -162,6 +157,24 @@ struct TastoCasuale: View {
         .sensoryFeedback(.impact(weight: .light), trigger: giri)
         .accessibilityLabel("A caso")
         .accessibilityHint("Scegli cosa mescolare e guarda foto e video in ordine sparso")
+    }
+}
+
+struct FondoArancio: ViewModifier {
+    @AppStorage(Vetro.chiave) private var vetro = true
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if Vetro.vero(vetro) {
+            content.vetro(Circle(), tinta: Tinta.arancio, interattivo: true)
+        } else {
+            content.background {
+                Circle().fill(Tinta.arancio)
+                    .overlay(Circle().fill(LinearGradient(colors: [.white.opacity(0.22), .clear],
+                                                          startPoint: .top, endPoint: .center)))
+                    .shadow(color: Tinta.arancio.opacity(0.45), radius: 8, y: 4)
+            }
+        }
     }
 }
 
@@ -580,7 +593,7 @@ struct QuadroCasuale: View {
                 Text(scatto.video ? "Questo video non si apre qui." : "Questa foto non si apre qui.")
                     .font(.system(size: 13)).foregroundStyle(Tinta.carta)
                     .padding(.horizontal, 14).padding(.vertical, 8)
-                    .background(.ultraThinMaterial, in: Capsule())
+                    .vetro(Capsule(), ripiego: .ultraThinMaterial, bordo: false)
                     .environment(\.colorScheme, .dark)
             }
         }
@@ -705,7 +718,7 @@ struct MostraCasuale: View {
                         .font(.system(size: 12.5, weight: .semibold))
                         .foregroundStyle(Tinta.carta)
                         .padding(.horizontal, 12).frame(height: 30)
-                        .background(.ultraThinMaterial, in: Capsule())
+                        .vetro(Capsule(), ripiego: .ultraThinMaterial, bordo: false)
                         .environment(\.colorScheme, .dark)
                         .frame(maxHeight: .infinity, alignment: .top)
                         .padding(.top, 24)
@@ -846,7 +859,7 @@ struct MostraCasuale: View {
                             Text(p.nome).font(.system(size: 12)).foregroundStyle(Tinta.carta).lineLimit(1)
                         }
                         .padding(.leading, 4).padding(.trailing, 10).padding(.vertical, 4)
-                        .background(.ultraThinMaterial, in: Capsule())
+                        .vetro(Capsule(), ripiego: .ultraThinMaterial, bordo: false)
                         .environment(\.colorScheme, .dark)
                     }
                 }

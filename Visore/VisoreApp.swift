@@ -534,9 +534,7 @@ struct BarraPillola: View {
             }
         }
         .padding(5)
-        .background(.regularMaterial, in: Capsule())
-        .overlay(Capsule().stroke(Tinta.lineaForte, lineWidth: 0.5))
-        .shadow(color: Tinta.ombra, radius: 18, y: 8)
+        .vetro(Capsule(), interattivo: true, ripiego: .regularMaterial, ombra: true)
         .sensoryFeedback(.selection, trigger: qui)
     }
 }
@@ -649,11 +647,13 @@ struct AzioniDiTesta: View {
     @EnvironmentObject var interfaccia: Interfaccia
 
     var body: some View {
-        HStack(spacing: 8) {
-            Tondo(simbolo: "magnifyingglass", etichetta: "Cerca") { interfaccia.cerca = true }
-            Tondo(simbolo: "gearshape", etichetta: "Impostazioni") { interfaccia.impostazioni = true }
-            TastoCasuale { interfaccia.casuale = true }
-                .padding(.leading, 2)
+        GruppoDiVetro {
+            HStack(spacing: 8) {
+                Tondo(simbolo: "magnifyingglass", etichetta: "Cerca") { interfaccia.cerca = true }
+                Tondo(simbolo: "gearshape", etichetta: "Impostazioni") { interfaccia.impostazioni = true }
+                TastoCasuale { interfaccia.casuale = true }
+                    .padding(.leading, 2)
+            }
         }
     }
 }

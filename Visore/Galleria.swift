@@ -5,30 +5,53 @@ import VisoreKit
 
 final class Miniature {
     static let tutte = Miniature()
+    static let scalini: [CGFloat] = [96, 200, 400, 640, 1400]
     private let cache = NSCache<NSString, UIImage>()
 
-    init() { cache.totalCostLimit = 120 * 1024 * 1024 }
+    init() { cache.totalCostLimit = 160 * 1024 * 1024 }
 
     func sfuma() { cache.removeAllObjects() }
 
-    func pronta(_ posto: String) -> UIImage? { cache.object(forKey: posto as NSString) }
+    static func scalino(_ lato: CGFloat) -> CGFloat {
+        scalini.first { $0 >= lato } ?? scalini[scalini.count - 1]
+    }
+
+    private func chiave(_ posto: String, _ scalino: CGFloat) -> NSString {
+        "\(posto)#\(Int(scalino))" as NSString
+    }
+
+    func pronta(_ posto: String) -> UIImage? {
+        for b in Miniature.scalini.reversed() {
+            if let fatta = cache.object(forKey: chiave(posto, b)) { return fatta }
+        }
+        return nil
+    }
+
+    func pronta(_ posto: String, lato: CGFloat) -> UIImage? {
+        let serve = Miniature.scalino(lato)
+        for b in Miniature.scalini where b >= serve {
+            if let fatta = cache.object(forKey: chiave(posto, b)) { return fatta }
+        }
+        return nil
+    }
 
     func carica(_ pacchetto: Pacchetto, _ posto: String, lato: CGFloat) async -> UIImage? {
-        if let fatta = pronta(posto) { return fatta }
+        if let fatta = pronta(posto, lato: lato) { return fatta }
+        let scalino = Miniature.scalino(lato)
         let immagine = await Task.detached(priority: .userInitiated) { () -> UIImage? in
             guard let dati = try? pacchetto.apri(posto),
                   let fonte = CGImageSourceCreateWithData(dati as CFData, nil) else { return nil }
             let opzioni: [CFString: Any] = [
                 kCGImageSourceCreateThumbnailFromImageAlways: true,
                 kCGImageSourceCreateThumbnailWithTransform: true,
-                kCGImageSourceThumbnailMaxPixelSize: max(64, lato),
+                kCGImageSourceThumbnailMaxPixelSize: scalino,
                 kCGImageSourceShouldCacheImmediately: true,
             ]
             guard let cg = CGImageSourceCreateThumbnailAtIndex(fonte, 0, opzioni as CFDictionary) else { return nil }
             return UIImage(cgImage: cg)
         }.value
         if let immagine {
-            cache.setObject(immagine, forKey: posto as NSString,
+            cache.setObject(immagine, forKey: chiave(posto, scalino),
                             cost: Int(immagine.size.width * immagine.size.height * immagine.scale * immagine.scale * 4))
         }
         return immagine
@@ -38,7 +61,8 @@ final class Miniature {
 struct GruppoDelGiorno: Identifiable {
     let giorno: String?
     var scatti: [Scatto]
-    var id: String { giorno ?? "senza-data" }
+    var per = 10
+    var id: String { "\(per)-" + (giorno ?? "senza-data") }
 }
 
 enum Testi {
@@ -64,6 +88,17 @@ enum Testi {
         guard let data = lettura.date(from: testo) else { return testo }
         return data.formatted(Date.FormatStyle().month(.wide).year().locale(Locale(identifier: "it_IT")))
             .capitalized(with: Locale(identifier: "it_IT"))
+    }
+
+    static let mesiCorti = ["Gen", "Feb", "Mar", "Apr", "Mag", "Giu", "Lug", "Ago", "Set", "Ott", "Nov", "Dic"]
+
+    static func tempo(_ chiave: String?, _ per: Int) -> String {
+        guard let chiave else { return "Senza data" }
+        let anno = String(chiave.prefix(4))
+        guard per > 4, chiave.count >= 7, let m = Int(chiave.dropFirst(5).prefix(2)), (1...12).contains(m) else {
+            return anno
+        }
+        return "\(mesiCorti[m - 1]) \(anno)"
     }
 
     static func numero(_ n: Int) -> String {
@@ -146,13 +181,14 @@ final class Elenco: ObservableObject {
         scatti += nuovi
     }
 
-    var gruppi: [GruppoDelGiorno] {
+    func gruppi(_ per: Int) -> [GruppoDelGiorno] {
         var uscita: [GruppoDelGiorno] = []
         for s in scatti {
-            if let ultimo = uscita.last, ultimo.giorno == s.giorno {
+            let chiave = s.giorno.map { String($0.prefix(per)) }
+            if let ultimo = uscita.last, ultimo.giorno == chiave {
                 uscita[uscita.count - 1].scatti.append(s)
             } else {
-                uscita.append(GruppoDelGiorno(giorno: s.giorno, scatti: [s]))
+                uscita.append(GruppoDelGiorno(giorno: chiave, scatti: [s], per: per))
             }
         }
         return uscita
@@ -227,22 +263,28 @@ struct GrigliaGiorni: View {
     @StateObject private var elenco: Elenco
     @State private var scelti: Set<Int64>?
     @State private var chiedeTogli = false
-    @AppStorage("visore.colonne") private var colonne = 3
+    @AppStorage("visore.livello") private var livello = 1
     @AppStorage("visore.proporzioni") private var proporzioni = false
     @State private var aperto: Aperto?
     @State private var visto: Int64 = 0
-    @State private var pizzico: CGFloat = 1
+    @State private var registro = Registro()
+    @State private var etichetta: String?
+    @State private var giu = true
     @State private var anteprima: Scatto?
     @State private var compatta = false
     @State private var anno: String?
     @Namespace private var zoom
+    @Namespace private var celle
 
     struct Aperto: Identifiable {
         let indice: Int
         var id: Int { indice }
     }
 
-    private static let livelli = [1, 3, 5, 7]
+    static let livelli = [1, 3, 5, 15, 31]
+    static let livelliLarghi = [3, 7, 9, 25, 51]
+    static let prefissi = [10, 10, 10, 7, 4]
+    static let spazio = "griglia-vista"
 
     init(pacchetto: Pacchetto, filtro: Filtro = Filtro(), titolo: String, sottotitolo: String? = nil,
          radice: Bool = false, cima: Int = 0, testa: AnyView? = nil, menu: AnyView? = nil,
@@ -263,10 +305,14 @@ struct GrigliaGiorni: View {
     var body: some View {
         GeometryReader { g in
             let largo = g.size.width > g.size.height * 1.2
-            let quante = largo ? min(12, max(colonne + 2, colonne * 2 - 1)) : colonne
-            let lato = floor((g.size.width - CGFloat(quante - 1) * 2) / CGFloat(quante))
-            let gruppi = elenco.gruppi
+            let i = min(max(livello, 0), GrigliaGiorni.livelli.count - 1)
+            let quante = largo ? GrigliaGiorni.livelliLarghi[i] : GrigliaGiorni.livelli[i]
+            let sp: CGFloat = quante >= 15 ? 1 : 2
+            let lato = floor((g.size.width - CGFloat(quante - 1) * sp) / CGFloat(quante))
+            let per = GrigliaGiorni.prefissi[i]
+            let gruppi = elenco.gruppi(per)
             let linea = elenco.linea
+            let _ = registro.ricorda(gruppi, quante: quante, passo: lato + sp, per: per)
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 0) {
@@ -276,21 +322,33 @@ struct GrigliaGiorni: View {
                         if radice { pillole(linea, proxy) }
                         if let testa { testa }
                         ForEach(gruppi) { gruppo in
-                            Intestazione(giorno: gruppo.giorno, luoghi: luoghi(gruppo), quante: quanteDel(gruppo),
-                                         tutte: scelti == nil ? nil : tutteDelGiorno(gruppo, linea))
-                                .id("giorno-" + gruppo.id)
-                            LazyVGrid(columns: Array(repeating: GridItem(.fixed(lato), spacing: 2), count: quante),
-                                      spacing: 2) {
+                            Group {
+                                if per == 10 {
+                                    Intestazione(giorno: gruppo.giorno, luoghi: luoghi(gruppo), quante: quanteDel(gruppo),
+                                                 tutte: scelti == nil ? nil : tutteDelGiorno(gruppo, linea))
+                                } else {
+                                    IntestazioneBreve(testo: Testi.tempo(gruppo.giorno, per), grande: per == 4)
+                                }
+                            }
+                            .id("giorno-" + (gruppo.giorno ?? "senza-data"))
+                            .transition(.opacity)
+                            LazyVGrid(columns: Array(repeating: GridItem(.fixed(lato), spacing: sp), count: quante),
+                                      spacing: sp) {
                                 ForEach(gruppo.scatti) { s in
                                     Riquadro(pacchetto: pacchetto, scatto: s, lato: lato, proporzioni: proporzioni,
                                              cuore: cassetto.haIlCuore(s), scelto: scelti.map { $0.contains(s.id) },
                                              tenuto: { anteprima = $0 ? s : (anteprima?.id == s.id ? nil : anteprima) })
+                                        .matchedGeometryEffect(id: s.id, in: celle)
                                         .matchedTransitionSource(id: s.id, in: zoom)
                                         .id(s.id)
                                         .onTapGesture { if scelti == nil { apri(s) } else { cambia(s.id) } }
                                         .onAppear { if s.id == elenco.scatti.last?.id { elenco.altri() } }
                                 }
                             }
+                            .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(GrigliaGiorni.spazio)) } action: {
+                                registro.sezioni[gruppo.id] = $0
+                            }
+                            .onDisappear { registro.sezioni[gruppo.id] = nil }
                         }
                         if elenco.scatti.isEmpty {
                             Vuoto(titolo: "Nessuna foto", testo: vuota)
@@ -298,18 +356,28 @@ struct GrigliaGiorni: View {
                     }
                     .padding(.bottom, 100)
                 }
+                .coordinateSpace(.named(GrigliaGiorni.spazio))
                 .scrollIndicators(.hidden)
                 .segueLaTesta($compatta)
-                .simultaneousGesture(MagnifyGesture()
-                    .onChanged { v in
-                        let quanto = v.magnification / pizzico
-                        guard quanto > 1.2 || quanto < 0.83 else { return }
-                        let prima = colonne
-                        withAnimation(Moto.scena) { cambiaColonne(quanto) }
-                        if colonne != prima { pizzico = v.magnification }
+                .onScrollGeometryChange(for: CGFloat.self) { $0.contentOffset.y } action: { prima, ora in
+                    segui(prima, ora)
+                }
+                .modifier(Pizzico(dentro: i > 0, fuori: i < GrigliaGiorni.livelli.count - 1) { verso, ancora in
+                    passa(verso, ancora, g.size, proxy)
+                })
+                .sensoryFeedback(.selection, trigger: livello)
+                .overlay(alignment: .topLeading) {
+                    ZStack(alignment: .topLeading) {
+                        if per < 10, compatta, let etichetta {
+                            EtichettaTempo(testo: Testi.tempo(etichetta, per), giu: giu)
+                                .padding(.top, 54)
+                                .padding(.leading, 12)
+                                .transition(.opacity.combined(with: .scale(scale: 0.9, anchor: .topLeading)))
+                        }
                     }
-                    .onEnded { _ in pizzico = 1 })
-                .sensoryFeedback(.selection, trigger: colonne)
+                    .animation(Moto.passo, value: per < 10 && compatta && etichetta != nil)
+                    .allowsHitTesting(false)
+                }
                 .overlay(alignment: .trailing) {
                     BarraAnni(linea: linea) { i in vai(i, linea, proxy) }
                         .padding(.top, 120)
@@ -472,7 +540,7 @@ struct GrigliaGiorni: View {
         guard linea.giorni.indices.contains(i) else { return }
         let giorno = linea.giorni[i]
         elenco.almeno(linea.prima[i] + (elenco.perGiorno[giorno]?.quanti ?? 1))
-        proxy.scrollTo("giorno-" + giorno, anchor: .top)
+        proxy.scrollTo("giorno-" + String(giorno.prefix(registro.per)), anchor: .top)
     }
 
     private func luoghi(_ gruppo: GruppoDelGiorno) -> [String] {
@@ -489,10 +557,143 @@ struct GrigliaGiorni: View {
         }
     }
 
-    private func cambiaColonne(_ quanto: CGFloat) {
-        guard let i = GrigliaGiorni.livelli.firstIndex(of: colonne) else { colonne = 3; return }
-        if quanto > 1.2, i > 0 { colonne = GrigliaGiorni.livelli[i - 1] }
-        if quanto < 0.83, i < GrigliaGiorni.livelli.count - 1 { colonne = GrigliaGiorni.livelli[i + 1] }
+    private func passa(_ verso: Int, _ ancora: UnitPoint, _ misura: CGSize, _ proxy: ScrollViewProxy) -> Bool {
+        let nuovo = min(max(livello, 0), GrigliaGiorni.livelli.count - 1) + verso
+        guard GrigliaGiorni.livelli.indices.contains(nuovo) else { return false }
+        let punto = CGPoint(x: ancora.x * misura.width, y: ancora.y * misura.height)
+        let fermo = registro.sotto(punto)
+        withAnimation(Moto.zoom) {
+            livello = nuovo
+            if let fermo { proxy.scrollTo(fermo, anchor: UnitPoint(x: 0.5, y: ancora.y)) }
+        }
+        return true
+    }
+
+    private func segui(_ prima: CGFloat, _ ora: CGFloat) {
+        guard registro.per < 10 else {
+            if etichetta != nil { etichetta = nil }
+            return
+        }
+        guard let chiave = registro.chiave(a: 74), chiave != etichetta else { return }
+        giu = ora >= prima
+        withAnimation(.spring(duration: 0.38, bounce: 0.16)) { etichetta = chiave }
+    }
+}
+
+final class Registro {
+    var sezioni: [String: CGRect] = [:]
+    private(set) var gruppi: [GruppoDelGiorno] = []
+    private(set) var quante = 3
+    private(set) var passo: CGFloat = 100
+    private(set) var per = 10
+
+    func ricorda(_ gruppi: [GruppoDelGiorno], quante: Int, passo: CGFloat, per: Int) {
+        self.gruppi = gruppi
+        self.quante = quante
+        self.passo = passo
+        self.per = per
+    }
+
+    private func distanza(_ r: CGRect, _ y: CGFloat) -> CGFloat {
+        y < r.minY ? r.minY - y : (y > r.maxY ? y - r.maxY : 0)
+    }
+
+    func sotto(_ p: CGPoint) -> Int64? {
+        guard let vicina = sezioni.min(by: { distanza($0.value, p.y) < distanza($1.value, p.y) }),
+              let g = gruppi.first(where: { $0.id == vicina.key }), !g.scatti.isEmpty, passo > 0 else { return nil }
+        let r = vicina.value
+        let colonna = min(quante - 1, max(0, Int((p.x - r.minX) / passo)))
+        let riga = max(0, Int((min(max(p.y, r.minY), r.maxY - 1) - r.minY) / passo))
+        return g.scatti[min(g.scatti.count - 1, riga * quante + colonna)].id
+    }
+
+    func chiave(a y: CGFloat) -> String? {
+        let sopra = sezioni.filter { $0.value.minY - 40 <= y }.max { $0.value.minY < $1.value.minY }
+        let scelta = sopra ?? sezioni.min { $0.value.minY < $1.value.minY }
+        guard let scelta else { return nil }
+        return gruppi.first { $0.id == scelta.key }?.giorno
+    }
+}
+
+struct Pizzico: ViewModifier {
+    let dentro: Bool
+    let fuori: Bool
+    let passa: (Int, UnitPoint) -> Bool
+    @State private var scala: CGFloat = 1
+    @State private var base: CGFloat = 1
+    @State private var ancora: UnitPoint = .center
+    @State private var attivo = false
+    @Environment(\.accessibilityReduceMotion) private var piano
+
+    func body(content: Content) -> some View {
+        content
+            .scaleEffect(scala, anchor: ancora)
+            .scrollDisabled(attivo)
+            .simultaneousGesture(MagnifyGesture(minimumScaleDelta: 0.01)
+                .onChanged { v in
+                    if !attivo {
+                        attivo = true
+                        base = v.magnification
+                        ancora = v.startAnchor
+                    }
+                    let quanto = v.magnification / base
+                    if quanto > 1.2, dentro, passa(-1, ancora) {
+                        base = v.magnification
+                        withAnimation(Moto.zoom) { scala = 1 }
+                    } else if quanto < 0.82, fuori, passa(1, ancora) {
+                        base = v.magnification
+                        withAnimation(Moto.zoom) { scala = 1 }
+                    } else {
+                        scala = elastico(quanto)
+                    }
+                }
+                .onEnded { _ in
+                    attivo = false
+                    withAnimation(Moto.zoom) { scala = 1 }
+                })
+    }
+
+    private func elastico(_ quanto: CGFloat) -> CGFloat {
+        if piano { return 1 }
+        let libero = quanto >= 1 ? dentro : fuori
+        return min(1.12, max(0.92, 1 + (quanto - 1) * (libero ? 0.55 : 0.12)))
+    }
+}
+
+struct EtichettaTempo: View {
+    let testo: String
+    let giu: Bool
+
+    var body: some View {
+        ZStack {
+            Text(testo)
+                .font(Carattere.serif(17, .headline))
+                .foregroundStyle(Tinta.ink)
+                .monospacedDigit()
+                .fixedSize()
+                .id(testo)
+                .transition(.push(from: giu ? .bottom : .top))
+        }
+        .padding(.horizontal, 14)
+        .frame(height: 34)
+        .clipShape(Capsule())
+        .vetro(Capsule(), ripiego: .regularMaterial, ombra: true)
+    }
+}
+
+struct IntestazioneBreve: View {
+    let testo: String
+    let grande: Bool
+
+    var body: some View {
+        Text(testo)
+            .font(grande ? Carattere.titoletto : Carattere.giorno)
+            .foregroundStyle(Tinta.ink)
+            .monospacedDigit()
+            .padding(.horizontal, 16)
+            .padding(.top, grande ? 16 : 12)
+            .padding(.bottom, 6)
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -607,20 +808,31 @@ struct Riquadro: View {
     @GestureState private var premuto = false
     @Environment(\.displayScale) private var scala
 
+    private var piccola: String { scatto.mini ?? scatto.posto }
+
+    private var fonte: String {
+        lato * scala > 700 && !scatto.video ? scatto.posto : piccola
+    }
+
+    private var scalino: CGFloat { Miniature.scalino(lato * scala) }
+
+    private var giaPronta: UIImage? {
+        Miniature.tutte.pronta(fonte) ?? Miniature.tutte.pronta(piccola)
+    }
+
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
-            if let immagine {
+            if let foto = immagine ?? giaPronta {
                 Tinta.pozzo
                 let forma = misura
-                Image(uiImage: immagine).resizable().scaledToFill()
+                Image(uiImage: foto).resizable().scaledToFill()
                     .frame(width: forma.width, height: forma.height).clipped()
                     .frame(width: lato, height: lato)
-                    .opacity(visto ? 1 : 0)
-                    .onAppear { withAnimation(Moto.passo) { visto = true } }
+                    .opacity(visto || immagine == nil ? 1 : 0)
             } else {
                 Luccichio()
             }
-            if scatto.video {
+            if scatto.video, lato > 50 {
                 Text(Testi.durata(scatto.durataMs))
                     .font(.system(size: 11, weight: .semibold)).monospacedDigit()
                     .foregroundStyle(.white).shadow(color: .black.opacity(0.6), radius: 2).padding(5)
@@ -636,7 +848,9 @@ struct Riquadro: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
                     .transition(.scale.combined(with: .opacity))
             }
-            if let scelto {
+            if let scelto, lato <= 30 {
+                if scelto { Tinta.accento.opacity(0.45) }
+            } else if let scelto {
                 if scelto { Tinta.accento.opacity(0.18) }
                 Image(systemName: scelto ? "checkmark.circle.fill" : "circle")
                     .font(.system(size: 21))
@@ -657,13 +871,25 @@ struct Riquadro: View {
             .sequenced(before: DragGesture(minimumDistance: 0))
             .updating($premuto) { valore, stato, _ in
                 if case .second(true, _) = valore { stato = true }
-            })
+            }, including: lato > 40 ? .all : .none)
         .onChange(of: premuto) { _, si in tenuto(si) }
-        .task(id: scatto.id) {
-            immagine = Miniature.tutte.pronta(scatto.mini ?? scatto.posto)
-            if immagine != nil { visto = true }
-            if immagine == nil {
-                immagine = await Miniature.tutte.carica(pacchetto, scatto.mini ?? scatto.posto, lato: lato * scala)
+        .task(id: "\(scatto.id)-\(Int(scalino))") {
+            let serve = lato * scala
+            if let pronta = Miniature.tutte.pronta(fonte, lato: serve) {
+                visto = true
+                immagine = pronta
+                return
+            }
+            let avevo = immagine != nil || giaPronta != nil
+            if avevo { visto = true }
+            var nuova = await Miniature.tutte.carica(pacchetto, fonte, lato: serve)
+            if nuova == nil, fonte != piccola { nuova = await Miniature.tutte.carica(pacchetto, piccola, lato: serve) }
+            guard let nuova, !Task.isCancelled else { return }
+            if avevo {
+                immagine = nuova
+            } else {
+                immagine = nuova
+                withAnimation(Moto.passo) { visto = true }
             }
         }
     }
@@ -779,6 +1005,17 @@ struct Impostazioni: View {
     @EnvironmentObject var cassetto: Cassetto
     @Environment(\.dismiss) private var chiudi
     @AppStorage(Giro.chiave) private var giroVisto = false
+    @AppStorage(Vetro.chiave) private var vetro = true
+
+    private var notaVetro: String {
+        if !Vetro.vero(true) {
+            return UIAccessibility.isReduceTransparencyEnabled
+                ? "Spento perché su iPhone è attivo «Riduci trasparenza» (Accessibilità)."
+                : "Il vetro liquido arriva con iOS 26."
+        }
+        return "Acceso: tasti e barre di vetro che lascia vedere le foto sotto, come su iPhone. "
+            + "Spento: tasti pieni e barre opache."
+    }
 
     var body: some View {
         ScrollView {
@@ -799,9 +1036,16 @@ struct Impostazioni: View {
                     Spiegazione(testo: "Si rinnova con AltStore, avviando AltServer sul portatile. Rinnovare non tocca niente. "
                                 + "Cancellare l'app e rimetterla porta via il pacchetto: andrebbe ricopiato tutto dal PC.")
                 }
+                GruppoImpostazioni(titolo: "Aspetto", nota: notaVetro) {
+                    Toggle(isOn: $vetro.animation(Moto.scena)) {
+                        Text("Vetro liquido").font(.system(size: 15)).foregroundStyle(Tinta.ink)
+                    }
+                    .padding(.vertical, 6)
+                    .disabled(!Vetro.vero(true))
+                }
                 GruppoImpostazioni(titolo: "Griglia",
                                    nota: "Spento: miniature quadrate, piene. Acceso: ogni foto con la sua forma, dentro il suo quadrato. "
-                                       + "Pizzica la griglia per vedere più foto o più grandi.") {
+                                       + "Pizzica la griglia: 1, 3, 5, 15 o 31 foto per riga. A 15 si vedono i mesi, a 31 gli anni.") {
                     Toggle(isOn: $proporzioni) { Text("Proporzioni vere").font(.system(size: 15)).foregroundStyle(Tinta.ink) }
                         .tint(Tinta.accento)
                         .padding(.vertical, 6)
@@ -903,9 +1147,7 @@ struct BarraScelta: View {
         .foregroundStyle(Tinta.ink)
         .disabled(quante == 0)
         .padding(5)
-        .background(.regularMaterial, in: Capsule())
-        .overlay(Capsule().stroke(Tinta.lineaForte, lineWidth: 0.5))
-        .shadow(color: Tinta.ombra, radius: 18, y: 8)
+        .vetro(Capsule(), interattivo: true, ripiego: .regularMaterial, ombra: true)
         .animation(Moto.passo, value: quante)
         .padding(.bottom, 6)
         .frame(maxWidth: .infinity)

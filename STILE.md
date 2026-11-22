@@ -23,6 +23,12 @@ Si usano sempre questi. Non si scrivono colori, caratteri o tempi a mano nelle s
   titoli, le date e i nomi grandi. Il testo di sistema serve per le scritte piccole e i comandi.
 - **Movimento `Moto`**: `gesto` 180 ms, `passo` 260 ms, `scena` 360 ms, sempre con la curva
   (.2,.8,.2,1). `molla` serve per i rimbalzi piccoli e `foglio` per i fogli dal basso.
+- **Vetro liquido** (`.vetro`, `GruppoDiVetro`, `Vetro`): acceso di base, come su iPhone, si
+  spegne in Impostazioni › Aspetto con l'interruttore. Si usa solo per i comandi che
+  galleggiano: tasti tondi, vetrini sopra le foto, barra in basso, barra della scelta,
+  annunci, pillole sopra le foto, testa compatta (sfumata). Mai sul contenuto (righe, carte,
+  pillole dei filtri). Spento, o con «Riduci trasparenza», o prima di iOS 26: tornano i pezzi
+  pieni di prima. Il tasto A caso diventa vetro arancio.
 - **Pezzi**:
   - `Testa`: il titolo grande serif, con «Indietro» sopra quando serve e i tasti tondi a destra.
   - `TestaCompatta`: la barra sottile che compare scorrendo.
@@ -64,9 +70,15 @@ Si usano sempre questi. Non si scrivono colori, caratteri o tempi a mano nelle s
   comandi, tenere premuto ferma, due tocchi mettono il cuore, giù chiude. Le foto si muovono
   piano, i video e le Live partono da soli, l'audio sale piano.
 - **Foto**: il titolo serif con il conteggio. Sotto ci sono le pillole «Raccolte», «Tutte» e
-  gli anni. I giorni hanno l'intestazione serif con i luoghi. Si pizzica per cambiare le
-  colonne (1, 3, 5, 7): le colonne cambiano mentre pizzichi, con un'animazione e una piccola
-  vibrazione. Non si ingrandisce mai tutta la pagina. In orizzontale le colonne aumentano. Le miniature compaiono
+  gli anni. Si pizzica come in Foto di iPhone: 1, 3, 5, 15 o 31 foto per riga. A 1, 3 e 5 i
+  giorni hanno l'intestazione serif con i luoghi; a 15 si raggruppa per mese («Nov 2026»),
+  a 31 per anno («2026»). Mentre pizzichi la griglia segue le dita con un poco di elastico,
+  non scorre e non trema; al passo di livello ogni foto vola al suo posto nuovo con una molla
+  e la foto sotto le dita resta sotto le dita, con una piccola vibrazione. Ai bordi (1 e 31)
+  l'elastico è duro. A 15 e 31, scorrendo, in alto a sinistra c'è la pillola di vetro col
+  mese o l'anno, che cambia a ghigliottina (il nuovo spinge via il vecchio). Le miniature
+  diventano più nitide quando si ingrandiscono; a 1 per riga si vede la foto vera. In
+  orizzontale le colonne aumentano (3, 7, 9, 25, 51). Le miniature compaiono
   sfumando, e tenendo premuto se ne vede l'anteprima. A destra c'è la barra per correre
   fra gli anni.
 - **Foto aperta**, come l'app Foto di iPhone:
@@ -119,6 +131,8 @@ Si usano sempre questi. Non si scrivono colori, caratteri o tempi a mano nelle s
 - Le pagine lasciano spazio sotto (circa 100 pt) per la barra che galleggia.
 - Niente prove a misura di telefono per il programma del PC. Il Visore invece è per il
   telefono, verticale e orizzontale.
-- Il compilatore è GitHub (macos-15-intel). Niente funzioni solo di iOS 26.
+- Il compilatore è GitHub (macos-26 con Xcode 26). L'app parte da iOS 18: le funzioni di
+  iOS 26 (il vetro) si usano solo con il ripiego per le versioni prima.
+- La pillola e i tasti della testa non si schiacciano mai: è il titolo che si accorcia.
 - La logica non si tocca per cambiare la grafica: sicurezza, scudo, diario, cassetto e
   pacchetto restano come sono.
