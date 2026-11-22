@@ -165,4 +165,63 @@ final class FiltriTests: XCTestCase {
         XCTAssertTrue(archivio.ciSonoParole())
         XCTAssertEqual(archivio.informazioni()["quanti_scatti"], "8")
     }
+
+    func testIlRiassuntoDiUnaPersona() throws {
+        let r = try archivio.riassunto(filtro: Filtro(persone: [1]))
+        XCTAssertEqual(r.quanti, 3)
+        XCTAssertEqual(r.video, 0)
+        XCTAssertEqual(r.dal, "2019-05-01")
+        XCTAssertEqual(r.al, "2021-01-02")
+        XCTAssertEqual(r.anni, [Anno(anno: "2021", quanti: 1), Anno(anno: "2019", quanti: 2)])
+        XCTAssertEqual(r.luoghi.map(\.nome), ["Firenze"])
+        XCTAssertEqual(r.luoghi.first?.quanti, 3)
+        XCTAssertEqual(r.persone.map(\.persona.nome), ["Bruno"])
+        XCTAssertEqual(r.persone.first?.quante, 1)
+        XCTAssertEqual(r.nodi.map(\.nodo.nome), ["Animali"])
+        XCTAssertEqual(r.nodi.first?.quante, 2)
+    }
+
+    func testIlRiassuntoNonMetteLaPersonaFraLeSueCompagnie() throws {
+        let r = try archivio.riassunto(filtro: Filtro(persone: [2]))
+        XCTAssertEqual(r.quanti, 2)
+        XCTAssertEqual(r.video, 1)
+        XCTAssertEqual(r.persone.map(\.persona.nome), ["Anna Rossi"])
+        XCTAssertEqual(r.luoghi.map(\.nome), ["Firenze", "Lucca"])
+        XCTAssertEqual(r.nodi.map(\.nodo.nome), ["Mare e monti"])
+    }
+
+    func testIlRiassuntoDiUnNodoGuardaIFigli() throws {
+        let r = try archivio.riassunto(filtro: Filtro(nodo: 1), figliDi: 1)
+        XCTAssertEqual(r.quanti, 3)
+        XCTAssertEqual(r.anni, [Anno(anno: "2021", quanti: 2), Anno(anno: "2019", quanti: 1)])
+        XCTAssertEqual(r.luoghi.map(\.nome), ["Firenze"])
+        XCTAssertEqual(r.persone.map(\.persona.nome), ["Anna Rossi"])
+        XCTAssertEqual(r.persone.first?.quante, 2)
+        XCTAssertEqual(r.nodi.map(\.nodo.nome), ["Gatti"])
+        XCTAssertEqual(r.nodi.first?.quante, 2)
+        XCTAssertEqual(try archivio.nodi(filtro: Filtro(), figliDi: 2).map(\.nodo.nome), ["Gatti neri"])
+        XCTAssertEqual(try archivio.nodi(filtro: Filtro()).map(\.nodo.nome), ["Animali", "Mare e monti"])
+    }
+
+    func testUnNodoVuotoHaUnRiassuntoVuoto() throws {
+        let r = try archivio.riassunto(filtro: Filtro(nodo: 4))
+        XCTAssertEqual(r.quanti, 0)
+        XCTAssertNil(r.dal)
+        XCTAssertNil(r.al)
+        XCTAssertEqual(r.anni, [])
+        XCTAssertEqual(r.luoghi, [])
+        XCTAssertEqual(r.persone, [])
+        XCTAssertEqual(r.nodi, [])
+        XCTAssertEqual(try archivio.copertine(filtro: Filtro(nodo: 4)), [])
+    }
+
+    func testLeCopertineVengonoDaGiorniDiversi() throws {
+        XCTAssertEqual(try archivio.copertine(filtro: Filtro()).map(\.id), [4, 3, 2, 7])
+        XCTAssertEqual(try archivio.copertine(filtro: Filtro(nodo: 1)).map(\.id), [4, 1, 6])
+        XCTAssertEqual(try archivio.copertine(filtro: Filtro(), quante: 2).map(\.id), [4, 3])
+    }
+
+    func testLePersoneInOrdineDiNome() throws {
+        XCTAssertEqual(try archivio.personePerNome().map(\.nome), ["Anna Rossi", "Bruno", "Ossobuco"])
+    }
 }

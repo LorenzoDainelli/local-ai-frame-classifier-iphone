@@ -62,6 +62,23 @@ public struct Anno: Identifiable, Hashable {
     public let quanti: Int
 }
 
+public struct NodoContato: Identifiable, Hashable {
+    public var id: Int64 { nodo.id }
+    public let nodo: Nodo
+    public let quante: Int
+}
+
+public struct Riassunto: Equatable {
+    public let quanti: Int
+    public let video: Int
+    public let dal: String?
+    public let al: String?
+    public let anni: [Anno]
+    public let luoghi: [Luogo]
+    public let persone: [Compagno]
+    public let nodi: [NodoContato]
+}
+
 public struct Dettagli: Equatable {
     public let nodi: [Nodo]
     public let persone: [Persona]
@@ -281,6 +298,98 @@ public final class Archivio {
 
     public func copertina(nodo: Int64) throws -> Scatto? {
         try scatti(filtro: Filtro(nodo: nodo), limite: 1).first
+    }
+
+    static func anche(_ dove: String, _ altro: String) -> String {
+        dove.isEmpty ? "WHERE " + altro : dove + " AND " + altro
+    }
+
+    public func copertine(filtro: Filtro, quante: Int = 4) throws -> [Scatto] {
+        let tutti = try scatti(filtro: filtro, limite: 400)
+        var giorni = Set<String>()
+        var scelti: [Scatto] = []
+        for s in tutti where scelti.count < quante && giorni.insert(s.giorno ?? "").inserted {
+            scelti.append(s)
+        }
+        for s in tutti where scelti.count < quante && !scelti.contains(s) {
+            scelti.append(s)
+        }
+        return scelti
+    }
+
+    public func anni(filtro: Filtro) throws -> [Anno] {
+        let (dove, legami) = Archivio.condizioni(filtro)
+        let sql = """
+        SELECT substr(s.giorno, 1, 4) AS a, count(*) FROM scatti s \(Archivio.anche(dove, "s.giorno IS NOT NULL"))
+        GROUP BY a ORDER BY a DESC
+        """
+        return try righe(sql, legami) { r in Anno(anno: r.testo(0)!, quanti: Int(r.intero(1)!)) }
+    }
+
+    public func luoghi(filtro: Filtro, limite: Int = 10) throws -> [Luogo] {
+        let (dove, legami) = Archivio.condizioni(filtro)
+        let sql = """
+        SELECT l.id, l.nome, count(*) AS n FROM scatti s JOIN luoghi l ON l.id = s.luogo_id
+        \(Archivio.anche(dove, "l.nome IS NOT NULL AND l.nome <> ''"))
+        GROUP BY l.id ORDER BY n DESC, l.nome, l.id LIMIT ?
+        """
+        return try righe(sql, legami + [Int64(limite)]) { r in
+            Luogo(id: r.intero(0)!, nome: r.testo(1)!, quanti: Int(r.intero(2)!))
+        }
+    }
+
+    public func persone(filtro: Filtro, limite: Int = 10) throws -> [Compagno] {
+        let (dove, legami) = Archivio.condizioni(filtro)
+        let tranne = "[" + filtro.persone.map(String.init).joined(separator: ",") + "]"
+        let sql = """
+        SELECT \(campiPersona), count(*) AS n FROM scatti s
+        JOIN persone_negli_scatti x ON x.scatto_id = s.id JOIN persone p ON p.id = x.persona_id
+        \(Archivio.anche(dove, "p.id NOT IN (SELECT value FROM json_each(?))"))
+        GROUP BY p.id ORDER BY n DESC, p.nome, p.id LIMIT ?
+        """
+        return try righe(sql, legami + [tranne as Any, Int64(limite)]) { r in
+            Compagno(persona: Archivio.persona(r), quante: Int(r.intero(6) ?? 0))
+        }
+    }
+
+    public func nodi(filtro: Filtro, figliDi genitore: Int64? = nil, limite: Int = 10) throws -> [NodoContato] {
+        let (dove, legami) = Archivio.condizioni(filtro)
+        let teste = genitore == nil
+            ? "SELECT id, id FROM nodi WHERE genitore_id IS NULL"
+            : "SELECT id, id FROM nodi WHERE genitore_id = ?"
+        let sql = """
+        WITH RECURSIVE capo(id, testa) AS (\(teste)
+          UNION ALL SELECT n.id, c.testa FROM nodi n JOIN capo c ON n.genitore_id = c.id)
+        SELECT n.id, n.genitore_id, n.nome, n.quanti, n.quanti_col_ramo, count(DISTINCT s.id) AS q
+        FROM scatti s JOIN etichette e ON e.scatto_id = s.id JOIN capo c ON c.id = e.nodo_id
+        JOIN nodi n ON n.id = c.testa \(dove)
+        GROUP BY n.id ORDER BY q DESC, n.posizione, n.id LIMIT ?
+        """
+        let prima: [Any] = genitore.map { [$0] } ?? []
+        return try righe(sql, prima + legami + [Int64(limite)]) { r in
+            NodoContato(nodo: Archivio.nodo(r), quante: Int(r.intero(5) ?? 0))
+        }
+    }
+
+    public func riassunto(filtro: Filtro, figliDi genitore: Int64? = nil) throws -> Riassunto {
+        let (dove, legami) = Archivio.condizioni(filtro)
+        let sql = """
+        SELECT count(*), coalesce(sum(s.genere = 'video'), 0), min(s.giorno), max(s.giorno) FROM scatti s \(dove)
+        """
+        let conti = try righe(sql, legami) { r in
+            (Int(r.intero(0) ?? 0), Int(r.intero(1) ?? 0), r.testo(2), r.testo(3))
+        }.first ?? (0, 0, nil, nil)
+        return Riassunto(quanti: conti.0, video: conti.1, dal: conti.2, al: conti.3,
+                         anni: try anni(filtro: filtro), luoghi: try luoghi(filtro: filtro),
+                         persone: try persone(filtro: filtro),
+                         nodi: try nodi(filtro: filtro, figliDi: genitore))
+    }
+
+    public func personePerNome() throws -> [Persona] {
+        try persone().sorted {
+            let ordine = $0.nome.localizedCaseInsensitiveCompare($1.nome)
+            return ordine == .orderedSame ? $0.id < $1.id : ordine == .orderedAscending
+        }
     }
 
     public func persone() throws -> [Persona] {

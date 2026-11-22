@@ -70,12 +70,23 @@ Si usano sempre questi. Non si scrivono colori, caratteri o tempi a mano nelle s
   - si apre e si chiude con lo zoom dalla miniatura.
 - **Informazioni**: un foglio a metà schermo. In cima giorno, ora e luogo, poi le carte e le
   pillole di persone e nodi, che vanno a capo.
-- **Nodi**: sono righe a carta, non riquadri. Il nome **non deve mai sovrapporsi né uscire
-  dalla carta**: sta su 2 righe al massimo, il numero non si stringe e il nome ha la
-  precedenza. Dentro un nodo, le sottocategorie si mostrano a righe: le prime 4, poi
-  «Mostra tutte». «Solo qui» e l'ordine stanno nel menu «…».
-- **Persone**: righe con il volto tondo, il periodo e il conteggio. Dentro una persona c'è
-  «Spesso insieme a» con i volti. Per due persone insieme i volti sono sovrapposti.
+- **Nodi** (bozza A scelta il 22 novembre 2026, con le righe della bozza B): righe a carta,
+  non riquadri, con il **mosaico di 4 foto** (64 pt) che al tocco si apre e si inclina un poco.
+  Sotto il nome: quante sottocategorie e il periodo. Il nome **non deve mai sovrapporsi né
+  uscire dalla carta**: sta su 2 righe al massimo, il numero non si stringe e il nome ha la
+  precedenza. Le righe entrano a cascata.
+- **Dentro un nodo**: in cima tre foto grandi, poi la carta dei numeri (scatti nel ramo, solo
+  qui, periodo). Le sottocategorie a righe: le prime 4, poi «Mostra tutte». Poi «Negli anni»
+  a barre che crescono, «Dove» a pillole e le persone in fila. Toccare un anno o un luogo
+  lascia nella griglia solo quelle foto e compare la pillola con la × per toglierlo.
+  «Solo qui», l'ordine delle sottocategorie e quello delle foto stanno nel menu «…».
+- **Persone**: in cima «Le più presenti», quattro volti con l'anello arancio che si riempie
+  secondo quante foto hanno. Poi tutte dalla A alla Z, divise per lettera, con l'indice delle
+  lettere a destra da toccare o strisciare. Al tocco il volto prende l'anello arancio.
+- **Dentro una persona**: il volto grande che entra con una molla e fa un battito arancio,
+  la carta dei numeri (la prima foto, l'anno con più, l'ultima), «Spesso insieme a» con i
+  volti, «Negli anni», «Dove», «Nei nodi» e «Insieme, in due» con i volti sovrapposti.
+  Anni e luoghi filtrano la griglia come nei nodi.
 - **Cerca**: si apre a tutto schermo. In alto la ricerca a pillola, poi il tasto filtri e
   «Chiudi». Sotto ci sono le pillole dei filtri attivi con la ×, le ricerche recenti in una
   carta, gli anni e i filtri come pillole che vanno a capo. I risultati hanno prima le righe
