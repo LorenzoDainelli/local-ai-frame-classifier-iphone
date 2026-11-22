@@ -83,4 +83,21 @@ final class GrigliaProve: XCTestCase {
         sleep(1)
         scatta("11-scorsa")
     }
+
+    func testFotoApertaEUnaPerRiga() {
+        if let k = app.launchArguments.firstIndex(of: "-visore.livello") { app.launchArguments[k + 1] = "0" }
+        let griglia = apri()
+        scatta("12-una-per-riga")
+        griglia.pinch(withScale: 0.5, velocity: -1)
+        sleep(1)
+        scatta("13-tre-per-riga")
+        griglia.cells.element(boundBy: 0).tap()
+        sleep(3)
+        scatta("14-foto-aperta")
+        for n in 0..<4 {
+            app.swipeLeft()
+            sleep(2)
+            scatta("15-foto-\(n)")
+        }
+    }
 }
