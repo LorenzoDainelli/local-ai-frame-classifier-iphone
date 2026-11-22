@@ -229,7 +229,6 @@ final class CellaFoto: UICollectionViewCell {
     override init(frame: CGRect) {
         super.init(frame: frame)
         contentView.backgroundColor = UIColor(Tinta.pozzo)
-        contentView.clipsToBounds = true
         contentView.layer.cornerCurve = .continuous
         foto.contentMode = .scaleAspectFill
         foto.clipsToBounds = true
@@ -302,6 +301,11 @@ final class CellaFoto: UICollectionViewCell {
         carica(s, pacchetto: pacchetto, px: px)
     }
 
+    func alza(_ s: Scatto, pacchetto: Pacchetto, px: CGFloat) {
+        guard id == s.id else { return }
+        carica(s, pacchetto: pacchetto, px: px)
+    }
+
     private func carica(_ s: Scatto, pacchetto: Pacchetto, px: CGFloat) {
         let piccola = s.mini ?? s.posto
         let fonte = px > 700 && !s.video ? s.posto : piccola
@@ -344,7 +348,11 @@ final class CellaFoto: UICollectionViewCell {
         durata.isHidden = !(video && w > 50)
         live.isHidden = !(mossa && !video && w > 60)
         cuore.isHidden = !(colCuore && w > 40)
-        contentView.layer.cornerRadius = w > 60 ? 3 : 1
+        let tonda = w > 60
+        if contentView.layer.masksToBounds != tonda {
+            contentView.layer.masksToBounds = tonda
+            contentView.layer.cornerRadius = tonda ? 3 : 0
+        }
         if let scelto {
             if w <= 30 {
                 spunta.isHidden = true
@@ -441,8 +449,8 @@ final class Molla: NSObject {
         let ora = CACurrentMediaTime()
         let dt = min(1.0 / 30, max(0, ora - ultimo))
         ultimo = ora
-        let k = pow(2 * CGFloat.pi / 0.36, 2)
-        let c = 2 * sqrt(k) * 0.95
+        let k = pow(2 * CGFloat.pi / 0.3, 2)
+        let c = 2 * sqrt(k)
         let h = CGFloat(dt) / 6
         for _ in 0..<6 {
             let forza = -k * (valore - meta) - c * velocita
@@ -578,6 +586,8 @@ final class GrigliaController: UIViewController, UICollectionViewDataSource, UIC
     static let livelli = [1, 3, 5, 15, 31]
     static let livelliLarghi = [3, 7, 9, 25, 51]
     static let prefissi = [10, 10, 10, 7, 4]
+    static let guadagno: CGFloat = 1.6
+    static let soglia: CGFloat = 0.35
 
     init(dati: GrigliaNativa) {
         self.dati = dati
@@ -691,6 +701,16 @@ final class GrigliaController: UIViewController, UICollectionViewDataSource, UIC
         disposizione.a = p
         disposizione.t = 0
         disposizione.invalidateLayout()
+        preparaVicine()
+    }
+
+    private func preparaVicine() {
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.largo > 0, !self.pizzicando, !self.molla.attiva else { return }
+            for i in [self.livello - 1, self.livello + 1] where GrigliaController.livelli.indices.contains(i) {
+                _ = self.pianta(i)
+            }
+        }
     }
 
     private func primoVisibile() -> (Int, CGFloat)? {
@@ -805,6 +825,13 @@ final class GrigliaController: UIViewController, UICollectionViewDataSource, UIC
         for ip in vista.indexPathsForVisibleItems {
             guard ip.item < scatti.count, let c = vista.cellForItem(at: ip) as? CellaFoto else { continue }
             configura(c, ip.item, px: px(ip.item), animato: animato)
+        }
+    }
+
+    private func alzaVisibili() {
+        for ip in vista.indexPathsForVisibleItems {
+            guard ip.item < scatti.count, let c = vista.cellForItem(at: ip) as? CellaFoto else { continue }
+            c.alza(scatti[ip.item], pacchetto: dati.pacchetto, px: px(ip.item))
         }
     }
 
@@ -1024,13 +1051,15 @@ final class GrigliaController: UIViewController, UICollectionViewDataSource, UIC
         tocco.prepare()
         vista.setContentOffset(vista.contentOffset, animated: false)
         vista.panGestureRecognizer.isEnabled = false
+        var q0: CGFloat = 1
         if !stavaAndando {
             disposizione.a = disposizione.da
             disposizione.t = 0
             verso = nil
+        } else if let b = verso {
+            q0 = exp(log(rapporto(b)) * disposizione.t / GrigliaController.guadagno)
         }
-        let latoOra = disposizione.lato
-        base = g.scale * lato(livello) / max(1, latoOra)
+        base = g.scale / max(0.01, q0)
         let p = g.location(in: vista)
         ditoY = g.location(in: view).y - vista.frame.minY
         if let k = disposizione.sotto(p) {
@@ -1045,11 +1074,14 @@ final class GrigliaController: UIViewController, UICollectionViewDataSource, UIC
         return GrigliaController.livelli.indices.contains(b) ? b : nil
     }
 
+    private func rapporto(_ b: Int) -> CGFloat {
+        max(0.01, lato(b)) / max(0.01, lato(livello))
+    }
+
     private func progresso(_ q: CGFloat, _ b: Int) -> CGFloat {
-        let a = lato(livello)
-        let d = lato(b) - a
-        guard abs(d) > 0.01 else { return 0 }
-        return min(1, max(0, (a * q - a) / d))
+        let r = log(rapporto(b))
+        guard abs(r) > 0.001, q > 0 else { return 0 }
+        return min(1, max(0, log(q) / r * GrigliaController.guadagno))
     }
 
     private func segui(_ g: UIPinchGestureRecognizer) {
@@ -1070,7 +1102,7 @@ final class GrigliaController: UIViewController, UICollectionViewDataSource, UIC
         let nuovo = b != verso
         verso = b
         applica(b ?? livello, t)
-        if nuovo, b != nil { rivedi(animato: false) }
+        if nuovo, let b, lato(b) > lato(livello) { alzaVisibili() }
     }
 
     private func applica(_ b: Int, _ t: CGFloat) {
@@ -1091,11 +1123,10 @@ final class GrigliaController: UIViewController, UICollectionViewDataSource, UIC
             return
         }
         let t = disposizione.t
-        let a = lato(livello)
-        let d = lato(b) - a
-        var v = abs(d) > 0.01 ? g.velocity / max(0.01, base) * a / d : 0
-        v = min(10, max(-10, v))
-        let meta: CGFloat = g.state == .ended && t + v * 0.12 > 0.5 ? 1 : 0
+        let r = log(rapporto(b))
+        var v = abs(r) > 0.001 ? GrigliaController.guadagno * g.velocity / max(0.01, g.scale) / r : 0
+        v = min(12, max(-12, v))
+        let meta: CGFloat = g.state == .ended && t + v * 0.15 > GrigliaController.soglia ? 1 : 0
         if meta == 1 { tocco.selectionChanged() }
         molla.vai(da: t, a: meta, velocita: v, passo: { [weak self] x in
             self?.applica(b, x)
@@ -1105,6 +1136,7 @@ final class GrigliaController: UIViewController, UICollectionViewDataSource, UIC
     }
 
     private func chiudi(_ nuovo: Int?) {
+        let prima = livello
         if let nuovo { livello = nuovo }
         verso = nil
         applica(livello, 0)
@@ -1114,9 +1146,10 @@ final class GrigliaController: UIViewController, UICollectionViewDataSource, UIC
             let azione = dati.azioni.livello
             DispatchQueue.main.async { azione(fatto) }
         }
-        rivedi(animato: false)
+        if lato(livello) > lato(prima) { alzaVisibili() }
         aggiornaCompatta()
         aggiornaEtichetta(forza: true)
+        preparaVicine()
         if inSospeso {
             inSospeso = false
             if dati.scatti.count != scatti.count || dati.scatti.last?.id != scatti.last?.id { metti() }
