@@ -218,7 +218,7 @@ struct PersonaVista: View {
                     Scheda {
                         ForEach(Array(r.nodi.enumerated()), id: \.element.id) { i, n in
                             if i > 0 { Separa(rientro: 90) }
-                            NavigationLink(value: n.nodo) {
+                            Collegamento(n.nodo) {
                                 RigaNodo(pacchetto: pacchetto, nodo: n.nodo, numero: n.quante)
                             }
                             .buttonStyle(PremibileVivo())
@@ -231,7 +231,7 @@ struct PersonaVista: View {
                     Scheda {
                         ForEach(Array(r.persone.prefix(3).enumerated()), id: \.element.id) { i, c in
                             if i > 0 { Separa() }
-                            NavigationLink(value: Coppia(prima: persona, seconda: c.persona)) {
+                            Collegamento(Coppia(prima: persona, seconda: c.persona)) {
                                 Riga(titolo: "\(persona.nome) e \(c.persona.nome)", numero: c.quante) {
                                     DueVolti(pacchetto: pacchetto, prima: persona, seconda: c.persona)
                                 }

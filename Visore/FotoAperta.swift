@@ -603,6 +603,7 @@ struct Informazioni: View {
             .senzaBarraDiSistema()
             .destinazioni(pacchetto)
         }
+        .environment(\.vaiA) { strada.spingi($0) }
         .presentationDetents([.fraction(0.5), .large], selection: $altezza)
         .onChange(of: strada.count) { _, n in withAnimation { altezza = n > 0 ? .large : .fraction(0.5) } }
         .task(id: scatto.id) { dettagli = try? pacchetto.archivio.dettagli(scatto.id) }

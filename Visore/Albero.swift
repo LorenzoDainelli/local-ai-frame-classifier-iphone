@@ -65,7 +65,7 @@ struct ElencoNodi: View {
         Scheda {
             ForEach(Array(nodi.enumerated()), id: \.element.id) { i, nodo in
                 if i > 0 { Separa(rientro: 90) }
-                NavigationLink(value: nodo) {
+                Collegamento(nodo) {
                     RigaNodo(pacchetto: pacchetto, nodo: nodo, numero: soloQui ? nodo.quanti : nodo.quantiColRamo)
                 }
                 .buttonStyle(PremibileVivo())

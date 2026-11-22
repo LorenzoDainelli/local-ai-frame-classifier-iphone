@@ -181,19 +181,6 @@ final class Elenco: ObservableObject {
         scatti += nuovi
     }
 
-    func gruppi(_ per: Int) -> [GruppoDelGiorno] {
-        var uscita: [GruppoDelGiorno] = []
-        for s in scatti {
-            let chiave = s.giorno.map { String($0.prefix(per)) }
-            if let ultimo = uscita.last, ultimo.giorno == chiave {
-                uscita[uscita.count - 1].scatti.append(s)
-            } else {
-                uscita.append(GruppoDelGiorno(giorno: chiave, scatti: [s], per: per))
-            }
-        }
-        return uscita
-    }
-
     var linea: Linea { Linea(giorni.compactMap { g in g.giorno.map { ($0, g.quanti) } }) }
 }
 
@@ -260,31 +247,22 @@ struct GrigliaGiorni: View {
     @EnvironmentObject var interfaccia: Interfaccia
     @EnvironmentObject var annunci: Annunci
     @Environment(\.dismiss) private var indietro
+    @Environment(\.vaiA) private var vaiA
     @StateObject private var elenco: Elenco
     @State private var scelti: Set<Int64>?
     @State private var chiedeTogli = false
     @AppStorage("visore.livello") private var livello = 1
     @AppStorage("visore.proporzioni") private var proporzioni = false
-    @State private var aperto: Aperto?
     @State private var visto: Int64 = 0
-    @State private var registro = Registro()
+    @State private var timone = Timone()
     @State private var etichetta: String?
     @State private var giu = true
     @State private var anteprima: Scatto?
     @State private var compatta = false
     @State private var anno: String?
-    @Namespace private var zoom
-    @Namespace private var celle
 
-    struct Aperto: Identifiable {
-        let indice: Int
-        var id: Int { indice }
-    }
-
-    static let livelli = [1, 3, 5, 15, 31]
-    static let livelliLarghi = [3, 7, 9, 25, 51]
-    static let prefissi = [10, 10, 10, 7, 4]
-    static let spazio = "griglia-vista"
+    static let livelli = GrigliaController.livelli
+    static let prefissi = GrigliaController.prefissi
 
     init(pacchetto: Pacchetto, filtro: Filtro = Filtro(), titolo: String, sottotitolo: String? = nil,
          radice: Bool = false, cima: Int = 0, testa: AnyView? = nil, menu: AnyView? = nil,
@@ -303,100 +281,35 @@ struct GrigliaGiorni: View {
     }
 
     var body: some View {
-        GeometryReader { g in
-            let largo = g.size.width > g.size.height * 1.2
-            let i = min(max(livello, 0), GrigliaGiorni.livelli.count - 1)
-            let quante = largo ? GrigliaGiorni.livelliLarghi[i] : GrigliaGiorni.livelli[i]
-            let sp: CGFloat = quante >= 15 ? 1 : 2
-            let lato = floor((g.size.width - CGFloat(quante - 1) * sp) / CGFloat(quante))
-            let per = GrigliaGiorni.prefissi[i]
-            let gruppi = elenco.gruppi(per)
-            let linea = elenco.linea
-            let _ = registro.ricorda(gruppi, quante: quante, passo: lato + sp, per: per)
-            ScrollViewReader { proxy in
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 0) {
-                        Testa(titolo: titolo, sottotitolo: sottotitoloVero,
-                              indietro: torna) { azioni }
-                            .id("cima")
-                        if radice { pillole(linea, proxy) }
-                        if let testa { testa }
-                        ForEach(gruppi) { gruppo in
-                            Group {
-                                if per == 10 {
-                                    Intestazione(giorno: gruppo.giorno, luoghi: luoghi(gruppo), quante: quanteDel(gruppo),
-                                                 tutte: scelti == nil ? nil : tutteDelGiorno(gruppo, linea))
-                                } else {
-                                    IntestazioneBreve(testo: Testi.tempo(gruppo.giorno, per), grande: per == 4)
-                                }
-                            }
-                            .id("giorno-" + (gruppo.giorno ?? "senza-data"))
-                            .transition(.opacity)
-                            LazyVGrid(columns: Array(repeating: GridItem(.fixed(lato), spacing: sp), count: quante),
-                                      spacing: sp) {
-                                ForEach(gruppo.scatti) { s in
-                                    Riquadro(pacchetto: pacchetto, scatto: s, lato: lato, proporzioni: proporzioni,
-                                             cuore: cassetto.haIlCuore(s), scelto: scelti.map { $0.contains(s.id) },
-                                             tenuto: { anteprima = $0 ? s : (anteprima?.id == s.id ? nil : anteprima) })
-                                        .matchedGeometryEffect(id: s.id, in: celle)
-                                        .matchedTransitionSource(id: s.id, in: zoom)
-                                        .id(s.id)
-                                        .onTapGesture { if scelti == nil { apri(s) } else { cambia(s.id) } }
-                                        .onAppear { if s.id == elenco.scatti.last?.id { elenco.altri() } }
-                                }
-                            }
-                            .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(GrigliaGiorni.spazio)) } action: {
-                                registro.sezioni[gruppo.id] = $0
-                            }
-                            .onDisappear { registro.sezioni[gruppo.id] = nil }
-                        }
-                        if elenco.scatti.isEmpty {
-                            Vuoto(titolo: "Nessuna foto", testo: vuota)
-                        }
-                    }
-                    .padding(.bottom, 100)
-                }
-                .coordinateSpace(.named(GrigliaGiorni.spazio))
-                .scrollIndicators(.hidden)
-                .segueLaTesta($compatta)
-                .onScrollGeometryChange(for: CGFloat.self) { $0.contentOffset.y } action: { prima, ora in
-                    segui(prima, ora)
-                }
-                .modifier(Pizzico(dentro: i > 0, fuori: i < GrigliaGiorni.livelli.count - 1) { verso, ancora in
-                    passa(verso, ancora, g.size, proxy)
-                })
-                .sensoryFeedback(.selection, trigger: livello)
-                .overlay(alignment: .topLeading) {
-                    ZStack(alignment: .topLeading) {
-                        if per < 10, compatta, let etichetta {
-                            EtichettaTempo(testo: Testi.tempo(etichetta, per), giu: giu)
-                                .padding(.top, 54)
-                                .padding(.leading, 12)
-                                .transition(.opacity.combined(with: .scale(scale: 0.9, anchor: .topLeading)))
-                        }
-                    }
-                    .animation(Moto.passo, value: per < 10 && compatta && etichetta != nil)
-                    .allowsHitTesting(false)
-                }
-                .overlay(alignment: .trailing) {
-                    BarraAnni(linea: linea) { i in vai(i, linea, proxy) }
-                        .padding(.top, 120)
-                }
-                .onChange(of: visto) { _, id in
-                    if aperto != nil { proxy.scrollTo(id, anchor: .center) }
-                }
-                .onChange(of: cima) { _, _ in
-                    withAnimation(Moto.scena) { proxy.scrollTo("cima", anchor: .top) }
-                    anno = nil
-                }
-                .fullScreenCover(item: $aperto) { a in
-                    FotoAperta(pacchetto: pacchetto, elenco: elenco, inizio: a.indice, visto: $visto, raccolta: raccolta)
-                        .environmentObject(cassetto)
-                        .environmentObject(annunci)
-                        .environmentObject(interfaccia)
-                        .navigationTransition(.zoom(sourceID: visto, in: zoom))
+        let i = min(max(livello, 0), GrigliaGiorni.livelli.count - 1)
+        let per = GrigliaGiorni.prefissi[i]
+        let linea = elenco.linea
+        ZStack {
+            GrigliaNativa(pacchetto: pacchetto, scatti: elenco.scatti, finiti: elenco.finiti,
+                          perGiorno: elenco.perGiorno, livello: i, proporzioni: proporzioni,
+                          cuori: cassetto.cuori, scelti: scelti, visto: visto, cima: AnyView(sopra(linea)),
+                          fondo: scelti == nil ? 100 : 160, timone: timone, azioni: azioniGriglia(linea))
+                .ignoresSafeArea(.container, edges: .vertical)
+        }
+        .overlay(alignment: .topLeading) {
+            ZStack(alignment: .topLeading) {
+                if per < 10, compatta, let etichetta {
+                    EtichettaTempo(testo: Testi.tempo(etichetta, per), giu: giu)
+                        .padding(.top, 54)
+                        .padding(.leading, 12)
+                        .transition(.opacity.combined(with: .scale(scale: 0.9, anchor: .topLeading)))
                 }
             }
+            .animation(Moto.passo, value: per < 10 && compatta && etichetta != nil)
+            .allowsHitTesting(false)
+        }
+        .overlay(alignment: .trailing) {
+            BarraAnni(linea: linea) { vai($0, linea) }
+                .padding(.top, 120)
+        }
+        .onChange(of: cima) { _, _ in
+            timone.inCima()
+            anno = nil
         }
         .testaCompatta(titolo, visibile: compatta, indietro: torna) { azioni }
         .background(Tinta.fondo.ignoresSafeArea())
@@ -434,9 +347,55 @@ struct GrigliaGiorni: View {
         } message: {
             Text("Le foto restano nell'archivio: escono solo da questa raccolta.")
         }
-        .onChange(of: aperto?.id) { _, nuovo in cassetto.aperta = nuovo != nil }
         .onChange(of: scelti == nil) { _, nessuno in interfaccia.scegliendo = !nessuno }
         .onDisappear { if scelti != nil { scelti = nil; interfaccia.scegliendo = false } }
+    }
+
+    private func sopra(_ linea: Linea) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Testa(titolo: titolo, sottotitolo: sottotitoloVero, indietro: torna) { azioni }
+            if radice { pillole(linea) }
+            if let testa { testa }
+            if elenco.scatti.isEmpty {
+                Vuoto(titolo: "Nessuna foto", testo: vuota)
+            }
+        }
+        .environmentObject(cassetto)
+        .environmentObject(interfaccia)
+        .environmentObject(annunci)
+        .environment(\.vaiA, vaiA)
+        .tint(Tinta.accento)
+    }
+
+    private func azioniGriglia(_ linea: Linea) -> AzioniGriglia {
+        AzioniGriglia(
+            livello: { livello = $0 },
+            compatta: { if compatta != $0 { compatta = $0 } },
+            etichetta: { chiave, verso in
+                giu = verso
+                withAnimation(.spring(duration: 0.38, bounce: 0.16)) { etichetta = chiave }
+            },
+            altri: { elenco.altri() },
+            cambia: { cambia($0) },
+            tenuto: { anteprima = $0 },
+            apri: { i in
+                guard elenco.scatti.indices.contains(i) else { return nil }
+                visto = elenco.scatti[i].id
+                return AnyView(FotoAperta(pacchetto: pacchetto, elenco: elenco, inizio: i, visto: $visto,
+                                          raccolta: raccolta)
+                    .environmentObject(cassetto)
+                    .environmentObject(annunci)
+                    .environmentObject(interfaccia)
+                    .tint(Tinta.accento))
+            },
+            aperto: { cassetto.aperta = $0 },
+            intestazione: { gruppo in
+                if gruppo.per == 10 {
+                    return AnyView(Intestazione(giorno: gruppo.giorno, luoghi: luoghi(gruppo), quante: quanteDel(gruppo),
+                                                tutte: scelti == nil ? nil : tutteDelGiorno(gruppo, linea)))
+                }
+                return AnyView(IntestazioneBreve(testo: Testi.tempo(gruppo.giorno, gruppo.per), grande: gruppo.per == 4))
+            })
     }
 
     private var torna: (() -> Void)? {
@@ -467,23 +426,23 @@ struct GrigliaGiorni: View {
         }
     }
 
-    private func pillole(_ linea: Linea, _ proxy: ScrollViewProxy) -> some View {
+    private func pillole(_ linea: Linea) -> some View {
         ScrollView(.horizontal) {
             HStack(spacing: 6) {
-                NavigationLink(value: TutteLeRaccolte()) {
+                Collegamento(TutteLeRaccolte()) {
                     Pillola(testo: "Raccolte", simbolo: "heart")
                 }
                 .buttonStyle(Premuto())
                 Rectangle().fill(Tinta.linea).frame(width: 0.5, height: 20).padding(.horizontal, 4)
                 Button {
                     anno = nil
-                    withAnimation(Moto.scena) { proxy.scrollTo("cima", anchor: .top) }
+                    timone.inCima()
                 } label: { Pillola(testo: "Tutte", scelta: anno == nil) }
                 .buttonStyle(Premuto())
                 ForEach(linea.anni, id: \.anno) { a in
                     Button {
                         anno = a.anno
-                        if let i = linea.giorni.firstIndex(where: { $0.hasPrefix(a.anno) }) { vai(i, linea, proxy) }
+                        if let i = linea.giorni.firstIndex(where: { $0.hasPrefix(a.anno) }) { vai(i, linea) }
                     } label: { Pillola(testo: a.anno, scelta: anno == a.anno) }
                     .buttonStyle(Premuto())
                 }
@@ -536,11 +495,11 @@ struct GrigliaGiorni: View {
         })
     }
 
-    private func vai(_ i: Int, _ linea: Linea, _ proxy: ScrollViewProxy) {
+    private func vai(_ i: Int, _ linea: Linea) {
         guard linea.giorni.indices.contains(i) else { return }
         let giorno = linea.giorni[i]
         elenco.almeno(linea.prima[i] + (elenco.perGiorno[giorno]?.quanti ?? 1))
-        proxy.scrollTo("giorno-" + String(giorno.prefix(registro.per)), anchor: .top)
+        timone.vai(giorno)
     }
 
     private func luoghi(_ gruppo: GruppoDelGiorno) -> [String] {
@@ -548,115 +507,6 @@ struct GrigliaGiorni: View {
         var visti: [String: Int] = [:]
         for s in gruppo.scatti { if let l = s.luogo { visti[l, default: 0] += 1 } }
         return visti.sorted { $0.value != $1.value ? $0.value > $1.value : $0.key < $1.key }.map(\.key)
-    }
-
-    private func apri(_ s: Scatto) {
-        if let i = elenco.scatti.firstIndex(where: { $0.id == s.id }) {
-            visto = s.id
-            aperto = Aperto(indice: i)
-        }
-    }
-
-    private func passa(_ verso: Int, _ ancora: UnitPoint, _ misura: CGSize, _ proxy: ScrollViewProxy) -> Bool {
-        let nuovo = min(max(livello, 0), GrigliaGiorni.livelli.count - 1) + verso
-        guard GrigliaGiorni.livelli.indices.contains(nuovo) else { return false }
-        let punto = CGPoint(x: ancora.x * misura.width, y: ancora.y * misura.height)
-        let fermo = registro.sotto(punto)
-        withAnimation(Moto.zoom) {
-            livello = nuovo
-            if let fermo { proxy.scrollTo(fermo, anchor: UnitPoint(x: 0.5, y: ancora.y)) }
-        }
-        return true
-    }
-
-    private func segui(_ prima: CGFloat, _ ora: CGFloat) {
-        guard registro.per < 10 else {
-            if etichetta != nil { etichetta = nil }
-            return
-        }
-        guard let chiave = registro.chiave(a: 74), chiave != etichetta else { return }
-        giu = ora >= prima
-        withAnimation(.spring(duration: 0.38, bounce: 0.16)) { etichetta = chiave }
-    }
-}
-
-final class Registro {
-    var sezioni: [String: CGRect] = [:]
-    private(set) var gruppi: [GruppoDelGiorno] = []
-    private(set) var quante = 3
-    private(set) var passo: CGFloat = 100
-    private(set) var per = 10
-
-    func ricorda(_ gruppi: [GruppoDelGiorno], quante: Int, passo: CGFloat, per: Int) {
-        self.gruppi = gruppi
-        self.quante = quante
-        self.passo = passo
-        self.per = per
-    }
-
-    private func distanza(_ r: CGRect, _ y: CGFloat) -> CGFloat {
-        y < r.minY ? r.minY - y : (y > r.maxY ? y - r.maxY : 0)
-    }
-
-    func sotto(_ p: CGPoint) -> Int64? {
-        guard let vicina = sezioni.min(by: { distanza($0.value, p.y) < distanza($1.value, p.y) }),
-              let g = gruppi.first(where: { $0.id == vicina.key }), !g.scatti.isEmpty, passo > 0 else { return nil }
-        let r = vicina.value
-        let colonna = min(quante - 1, max(0, Int((p.x - r.minX) / passo)))
-        let riga = max(0, Int((min(max(p.y, r.minY), r.maxY - 1) - r.minY) / passo))
-        return g.scatti[min(g.scatti.count - 1, riga * quante + colonna)].id
-    }
-
-    func chiave(a y: CGFloat) -> String? {
-        let sopra = sezioni.filter { $0.value.minY - 40 <= y }.max { $0.value.minY < $1.value.minY }
-        let scelta = sopra ?? sezioni.min { $0.value.minY < $1.value.minY }
-        guard let scelta else { return nil }
-        return gruppi.first { $0.id == scelta.key }?.giorno
-    }
-}
-
-struct Pizzico: ViewModifier {
-    let dentro: Bool
-    let fuori: Bool
-    let passa: (Int, UnitPoint) -> Bool
-    @State private var scala: CGFloat = 1
-    @State private var base: CGFloat = 1
-    @State private var ancora: UnitPoint = .center
-    @State private var attivo = false
-    @Environment(\.accessibilityReduceMotion) private var piano
-
-    func body(content: Content) -> some View {
-        content
-            .scaleEffect(scala, anchor: ancora)
-            .scrollDisabled(attivo)
-            .simultaneousGesture(MagnifyGesture(minimumScaleDelta: 0.01)
-                .onChanged { v in
-                    if !attivo {
-                        attivo = true
-                        base = v.magnification
-                        ancora = v.startAnchor
-                    }
-                    let quanto = v.magnification / base
-                    if quanto > 1.2, dentro, passa(-1, ancora) {
-                        base = v.magnification
-                        withAnimation(Moto.zoom) { scala = 1 }
-                    } else if quanto < 0.82, fuori, passa(1, ancora) {
-                        base = v.magnification
-                        withAnimation(Moto.zoom) { scala = 1 }
-                    } else {
-                        scala = elastico(quanto)
-                    }
-                }
-                .onEnded { _ in
-                    attivo = false
-                    withAnimation(Moto.zoom) { scala = 1 }
-                })
-    }
-
-    private func elastico(_ quanto: CGFloat) -> CGFloat {
-        if piano { return 1 }
-        let libero = quanto >= 1 ? dentro : fuori
-        return min(1.12, max(0.92, 1 + (quanto - 1) * (libero ? 0.55 : 0.12)))
     }
 }
 
@@ -792,114 +642,6 @@ struct Luccichio: View {
         Rectangle()
             .fill(acceso ? Tinta.superficieAlta : Tinta.pozzo)
             .onAppear { withAnimation(.easeInOut(duration: 0.9).repeatForever()) { acceso = true } }
-    }
-}
-
-struct Riquadro: View {
-    let pacchetto: Pacchetto
-    let scatto: Scatto
-    let lato: CGFloat
-    let proporzioni: Bool
-    var cuore = false
-    var scelto: Bool? = nil
-    let tenuto: (Bool) -> Void
-    @State private var immagine: UIImage?
-    @State private var visto = false
-    @GestureState private var premuto = false
-    @Environment(\.displayScale) private var scala
-
-    private var piccola: String { scatto.mini ?? scatto.posto }
-
-    private var fonte: String {
-        lato * scala > 700 && !scatto.video ? scatto.posto : piccola
-    }
-
-    private var scalino: CGFloat { Miniature.scalino(lato * scala) }
-
-    private var giaPronta: UIImage? {
-        Miniature.tutte.pronta(fonte) ?? Miniature.tutte.pronta(piccola)
-    }
-
-    var body: some View {
-        ZStack(alignment: .bottomTrailing) {
-            if let foto = immagine ?? giaPronta {
-                Tinta.pozzo
-                let forma = misura
-                Image(uiImage: foto).resizable().scaledToFill()
-                    .frame(width: forma.width, height: forma.height).clipped()
-                    .frame(width: lato, height: lato)
-                    .opacity(visto || immagine == nil ? 1 : 0)
-            } else {
-                Luccichio()
-            }
-            if scatto.video, lato > 50 {
-                Text(Testi.durata(scatto.durataMs))
-                    .font(.system(size: 11, weight: .semibold)).monospacedDigit()
-                    .foregroundStyle(.white).shadow(color: .black.opacity(0.6), radius: 2).padding(5)
-            } else if scatto.live, lato > 60 {
-                Image(systemName: "livephoto")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(.white).shadow(color: .black.opacity(0.6), radius: 2).padding(5)
-            }
-            if cuore, lato > 40 {
-                Image(systemName: "heart.fill")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(.white).shadow(color: .black.opacity(0.6), radius: 2).padding(5)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
-                    .transition(.scale.combined(with: .opacity))
-            }
-            if let scelto, lato <= 30 {
-                if scelto { Tinta.accento.opacity(0.45) }
-            } else if let scelto {
-                if scelto { Tinta.accento.opacity(0.18) }
-                Image(systemName: scelto ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: 21))
-                    .symbolRenderingMode(scelto ? .palette : .monochrome)
-                    .foregroundStyle(.white, Tinta.arancio)
-                    .shadow(color: .black.opacity(0.4), radius: 2).padding(5)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
-                    .contentTransition(.symbolEffect(.replace))
-            }
-        }
-        .frame(width: lato, height: lato)
-        .clipShape(RoundedRectangle(cornerRadius: lato > 60 ? 3 : 1, style: .continuous))
-        .scaleEffect(scelto == true ? 0.92 : 1)
-        .animation(Moto.molla, value: scelto)
-        .animation(Moto.molla, value: cuore)
-        .contentShape(Rectangle())
-        .simultaneousGesture(LongPressGesture(minimumDuration: 0.35)
-            .sequenced(before: DragGesture(minimumDistance: 0))
-            .updating($premuto) { valore, stato, _ in
-                if case .second(true, _) = valore { stato = true }
-            }, including: lato > 40 ? .all : .none)
-        .onChange(of: premuto) { _, si in tenuto(si) }
-        .task(id: "\(scatto.id)-\(Int(scalino))") {
-            let serve = lato * scala
-            if let pronta = Miniature.tutte.pronta(fonte, lato: serve) {
-                visto = true
-                immagine = pronta
-                return
-            }
-            let avevo = immagine != nil || giaPronta != nil
-            if avevo { visto = true }
-            var nuova = await Miniature.tutte.carica(pacchetto, fonte, lato: serve)
-            if nuova == nil, fonte != piccola { nuova = await Miniature.tutte.carica(pacchetto, piccola, lato: serve) }
-            guard let nuova, !Task.isCancelled else { return }
-            if avevo {
-                immagine = nuova
-            } else {
-                immagine = nuova
-                withAnimation(Moto.passo) { visto = true }
-            }
-        }
-    }
-
-    private var misura: CGSize {
-        guard proporzioni, let w = scatto.larghezza, let h = scatto.altezza, w > 0, h > 0 else {
-            return CGSize(width: lato, height: lato)
-        }
-        let r = CGFloat(w) / CGFloat(h)
-        return r >= 1 ? CGSize(width: lato, height: lato / r) : CGSize(width: lato * r, height: lato)
     }
 }
 

@@ -546,6 +546,7 @@ struct Galleria: View {
     @StateObject private var annunci = Annunci()
     @State private var qui: Sezione = .foto
     @State private var strade: [Sezione: NavigationPath] = [:]
+    @State private var stradaCerca = NavigationPath()
     @State private var cima: [Sezione: Int] = [:]
     @AppStorage(Giro.chiave) private var giroVisto = false
 
@@ -556,6 +557,7 @@ struct Galleria: View {
                     radice(s)
                         .destinazioni(pacchetto)
                 }
+                .environment(\.vaiA) { strade[s, default: NavigationPath()].spingi($0) }
                 .opacity(qui == s ? 1 : 0)
                 .allowsHitTesting(qui == s)
                 .accessibilityHidden(qui != s)
@@ -604,11 +606,12 @@ struct Galleria: View {
                 .environmentObject(cassetto)
                 .environmentObject(interfaccia)
         }
-        .fullScreenCover(isPresented: $interfaccia.cerca) {
-            NavigationStack {
+        .fullScreenCover(isPresented: $interfaccia.cerca, onDismiss: { stradaCerca = NavigationPath() }) {
+            NavigationStack(path: $stradaCerca) {
                 Cerca(pacchetto: pacchetto, chiudi: { interfaccia.cerca = false })
                     .destinazioni(pacchetto)
             }
+            .environment(\.vaiA) { stradaCerca.spingi($0) }
             .environmentObject(cassetto)
             .environmentObject(interfaccia)
             .environmentObject(annunci)

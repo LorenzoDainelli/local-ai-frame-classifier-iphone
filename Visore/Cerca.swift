@@ -104,6 +104,7 @@ struct Cerca: View {
         }
         .sheet(item: $scelta) { s in
             NavigationStack { foglio(s) }
+                .environment(\.vaiA, nil)
                 .presentationDetents([.medium, .large])
                 .foglioStile()
         }
@@ -303,14 +304,14 @@ struct Cerca: View {
     private func vociDa(_ t: Trovati) -> [VoceTrovata] {
         var v: [VoceTrovata] = []
         for p in t.persone {
-            v.append(VoceTrovata(id: "p\(p.id)", vista: AnyView(NavigationLink(value: p) {
+            v.append(VoceTrovata(id: "p\(p.id)", vista: AnyView(Collegamento(p) {
                 Riga(titolo: p.nome, sottotitolo: "Persona", numero: p.quanti) {
                     Volto(pacchetto: pacchetto, persona: p, lato: 32)
                 }
             }.buttonStyle(Premibile()))))
         }
         for n in t.nodi {
-            v.append(VoceTrovata(id: "n\(n.id)", vista: AnyView(NavigationLink(value: n) {
+            v.append(VoceTrovata(id: "n\(n.id)", vista: AnyView(Collegamento(n) {
                 Riga(titolo: n.nome, sottotitolo: "Nodo", numero: n.quantiColRamo) {
                     Copertina(pacchetto: pacchetto, nodo: n, lato: 32)
                 }

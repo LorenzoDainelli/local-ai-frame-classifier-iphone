@@ -59,7 +59,6 @@ enum Moto {
     static let scena = Animation.timingCurve(0.2, 0.8, 0.2, 1, duration: 0.36)
     static let molla = Animation.spring(duration: 0.34, bounce: 0.28)
     static let foglio = Animation.spring(duration: 0.42, bounce: 0.12)
-    static let zoom = Animation.spring(duration: 0.42, bounce: 0.08)
 }
 
 struct Premuto: ButtonStyle {
@@ -193,6 +192,33 @@ extension View {
 
     func senzaBarraDiSistema() -> some View {
         toolbar(.hidden, for: .navigationBar)
+    }
+}
+
+extension NavigationPath {
+    mutating func spingi<V: Hashable>(_ valore: V) { append(valore) }
+}
+
+extension EnvironmentValues {
+    @Entry var vaiA: ((any Hashable) -> Void)? = nil
+}
+
+struct Collegamento<Valore: Hashable, Etichetta: View>: View {
+    let valore: Valore
+    let etichetta: Etichetta
+    @Environment(\.vaiA) private var vai
+
+    init(_ valore: Valore, @ViewBuilder etichetta: () -> Etichetta) {
+        self.valore = valore
+        self.etichetta = etichetta()
+    }
+
+    var body: some View {
+        if let vai {
+            Button { vai(valore) } label: { etichetta }
+        } else {
+            NavigationLink(value: valore) { etichetta }
+        }
     }
 }
 
