@@ -43,18 +43,32 @@ struct Pianta {
             let h = testata(chiave, i, fine)
             p.gruppi.append(Gruppo(inizio: i, fine: fine, chiave: chiave, alto: h))
             y += h
-            for j in i..<fine {
-                let k = j - i
-                celle[j] = CGRect(x: margine + CGFloat(k % colonne) * passo, y: y + CGFloat(k / colonne) * passo,
-                                  width: lato, height: lato)
+            if colonne == 1 {
+                for j in i..<fine {
+                    let alta = floor(lato * Pianta.forma(scatti[j]))
+                    celle[j] = CGRect(x: margine, y: y, width: lato, height: alta)
+                    y += alta + sp
+                }
+                y -= sp
+            } else {
+                for j in i..<fine {
+                    let k = j - i
+                    celle[j] = CGRect(x: margine + CGFloat(k % colonne) * passo, y: y + CGFloat(k / colonne) * passo,
+                                      width: lato, height: lato)
+                }
+                let righe = (fine - i + colonne - 1) / colonne
+                y += CGFloat(righe) * passo - sp
             }
-            let righe = (fine - i + colonne - 1) / colonne
-            y += CGFloat(righe) * passo - sp
             i = fine
         }
         p.celle = celle
         p.alto = y
         return p
+    }
+
+    static func forma(_ s: Scatto) -> CGFloat {
+        guard let w = s.larghezza, let h = s.altezza, w > 0, h > 0 else { return 1 }
+        return min(1.8, max(0.3, CGFloat(h) / CGFloat(w)))
     }
 
     func gruppo(di i: Int) -> Int? {
@@ -762,11 +776,18 @@ final class GrigliaController: UIViewController, UICollectionViewDataSource, UIC
         aggiornaEtichetta(forza: true)
     }
 
+    private func px(_ i: Int) -> CGFloat {
+        var lato: CGFloat = 0
+        for p in [disposizione.da, disposizione.a] where i < p.celle.count {
+            lato = max(lato, p.celle[i].width, p.celle[i].height)
+        }
+        return max(1, lato) * max(1, traitCollection.displayScale)
+    }
+
     private func rivedi(animato: Bool) {
-        let px = disposizione.lato * max(1, traitCollection.displayScale)
         for ip in vista.indexPathsForVisibleItems {
             guard ip.item < scatti.count, let c = vista.cellForItem(at: ip) as? CellaFoto else { continue }
-            configura(c, ip.item, px: px, animato: animato)
+            configura(c, ip.item, px: px(ip.item), animato: animato)
         }
     }
 
@@ -809,8 +830,7 @@ final class GrigliaController: UIViewController, UICollectionViewDataSource, UIC
                         cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
         let c = collectionView.dequeueReusableCell(withReuseIdentifier: "foto", for: indexPath)
         if let foto = c as? CellaFoto, indexPath.item < scatti.count {
-            let lato = max(disposizione.da.lato, disposizione.a.celle.isEmpty ? 0 : disposizione.a.lato)
-            configura(foto, indexPath.item, px: lato * max(1, traitCollection.displayScale), animato: false)
+            configura(foto, indexPath.item, px: px(indexPath.item), animato: false)
         }
         return c
     }
@@ -838,13 +858,18 @@ final class GrigliaController: UIViewController, UICollectionViewDataSource, UIC
 
     func scrollViewDidScroll(_ scrollView: UIScrollView) {
         let y = scrollView.contentOffset.y + scrollView.adjustedContentInset.top
+        if !pizzicando, !molla.attiva { aggiornaCompatta() }
+        if !pizzicando, !molla.attiva { aggiornaEtichetta(forza: false) }
+    }
+
+    private func aggiornaCompatta() {
+        let y = vista.contentOffset.y + vista.adjustedContentInset.top
         let nuova = y > 56
         if nuova != compatta {
             compatta = nuova
             let azione = dati.azioni.compatta
             DispatchQueue.main.async { azione(nuova) }
         }
-        if !pizzicando, !molla.attiva { aggiornaEtichetta(forza: false) }
     }
 
     private func aggiornaEtichetta(forza: Bool) {
@@ -1020,8 +1045,10 @@ final class GrigliaController: UIViewController, UICollectionViewDataSource, UIC
             b = nil
             t = 0
         }
+        let nuovo = b != verso
         verso = b
         applica(b ?? livello, t)
+        if nuovo, b != nil { rivedi(animato: false) }
     }
 
     private func applica(_ b: Int, _ t: CGFloat) {
@@ -1066,6 +1093,7 @@ final class GrigliaController: UIViewController, UICollectionViewDataSource, UIC
             DispatchQueue.main.async { azione(fatto) }
         }
         rivedi(animato: false)
+        aggiornaCompatta()
         aggiornaEtichetta(forza: true)
         if inSospeso {
             inSospeso = false
