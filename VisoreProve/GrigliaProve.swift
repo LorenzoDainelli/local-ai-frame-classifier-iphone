@@ -17,8 +17,24 @@ final class GrigliaProve: XCTestCase {
         add(a)
     }
 
+    private func descrivi(_ nome: String) {
+        let a = XCTAttachment(string: app.debugDescription)
+        a.name = nome
+        a.lifetime = .keepAlways
+        add(a)
+    }
+
+    private func togliAvvisi() {
+        let trampolino = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        for nome in ["Don’t Allow", "Don't Allow", "Non consentire"] {
+            let tasto = trampolino.buttons[nome]
+            if tasto.waitForExistence(timeout: 1) { tasto.tap() }
+        }
+    }
+
     private func apri() -> XCUIElement {
         app.launch()
+        togliAvvisi()
         let tasto = app.buttons["Apri"]
         XCTAssertTrue(tasto.waitForExistence(timeout: 30))
         scatta("0-sblocco")
@@ -26,6 +42,7 @@ final class GrigliaProve: XCTestCase {
         let griglia = app.collectionViews.firstMatch
         XCTAssertTrue(griglia.waitForExistence(timeout: 240))
         sleep(2)
+        togliAvvisi()
         return griglia
     }
 
@@ -91,9 +108,12 @@ final class GrigliaProve: XCTestCase {
         griglia.pinch(withScale: 0.5, velocity: -1)
         sleep(1)
         scatta("13-tre-per-riga")
-        griglia.cells.element(boundBy: 0).tap()
+        let prima = griglia.cells.element(boundBy: 0)
+        descrivi("gerarchia-prima-del-tocco")
+        prima.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
         sleep(3)
         scatta("14-foto-aperta")
+        descrivi("gerarchia-foto-aperta")
         for n in 0..<4 {
             app.swipeLeft()
             sleep(2)
