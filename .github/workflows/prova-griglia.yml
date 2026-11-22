@@ -29,13 +29,29 @@ jobs:
           id=$(xcrun simctl list devices available -j | python3 -c "import json,sys; d=json.load(sys.stdin)['devices']; v=[x for k in sorted(d, reverse=True) if 'iOS' in k for x in d[k] if x['name'].startswith('iPhone') and 'Pro' in x['name'] and 'Max' not in x['name']]; print(v[0]['udid'])")
           echo "Simulatore $id"
           xcodebuild test -project Visore.xcodeproj -scheme Visore -destination "id=$id" \
-            -resultBundlePath prove.xcresult CODE_SIGNING_ALLOWED=NO
+            -resultBundlePath prove.xcresult CODE_SIGNING_ALLOWED=NO 2>&1 | tee prove.log | grep -E "error|failed|passed|Test Case|XCTAssert|crash|Fatal" || true
+          grep -q "TEST SUCCEEDED" prove.log
       - name: Schermate
         if: always()
         run: |
           mkdir -p schermate
           xcrun xcresulttool export attachments --path prove.xcresult --output-path schermate || true
-          ls -la schermate
+          cd schermate && for f in $(find . -name "*.txt" -size +1k); do echo "=== $f"; cat "$f"; done
+      - name: Schermate piccole nel registro
+        if: always()
+        run: |
+          cd schermate
+          python3 -c "
+          import json
+          for t in json.load(open('manifest.json')):
+              for a in t.get('attachments', []):
+                  n = a.get('suggestedHumanReadableName', '')
+                  if n.endswith('.png') and not n.startswith('Screen'):
+                      print(a['exportedFileName'], n.split('_')[0])
+          " | sort -k2 | while read f nome; do
+            sips -Z 520 -s format jpeg -s formatOptions 55 "$f" --out "/tmp/$nome.jpg" >/dev/null
+            echo "SCHERMATA $nome $(base64 -i /tmp/$nome.jpg | tr -d '\n')"
+          done
       - uses: actions/upload-artifact@v4
         if: always()
         with:

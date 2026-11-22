@@ -7,7 +7,7 @@ final class GrigliaProve: XCTestCase {
         continueAfterFailure = true
         app = XCUIApplication()
         app.launchArguments = ["-visore.prova", "YES", "-visore.giro.visto", "YES", "-visore.livello", "2",
-                               "-visore.vetro", "YES"]
+                               "-visore.vetro", "YES", "-visore.scudo.saltato", "YES"]
     }
 
     private func scatta(_ nome: String) {
