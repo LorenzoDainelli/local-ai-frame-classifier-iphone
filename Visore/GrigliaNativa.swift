@@ -519,8 +519,25 @@ private struct Cima: View {
     }
 }
 
+final class Apparso: ObservableObject {
+    @Published var giro = 0
+}
+
+struct Ripresa: View {
+    @ObservedObject var apparso: Apparso
+    let contenuto: AnyView
+
+    var body: some View { contenuto.id(apparso.giro) }
+}
+
 final class Ospite: UIHostingController<AnyView> {
     var chiuso: (() -> Void)?
+    var apparso: Apparso?
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        if let apparso, apparso.giro == 0 { apparso.giro = 1 }
+    }
 
     override func viewDidDisappear(_ animated: Bool) {
         super.viewDidDisappear(animated)
@@ -924,8 +941,10 @@ final class GrigliaController: UIViewController, UICollectionViewDataSource, UIC
         guard presentedViewController == nil, let contenuto = dati.azioni.apri(i) else { return }
         visto = scatti[i].id
         let bordi = view.window?.safeAreaInsets ?? Gesti.bordi
-        let ospite = Ospite(rootView: AnyView(contenuto.safeAreaPadding(
-            EdgeInsets(top: bordi.top, leading: bordi.left, bottom: bordi.bottom, trailing: bordi.right))))
+        let apparso = Apparso()
+        let ospite = Ospite(rootView: AnyView(Ripresa(apparso: apparso, contenuto: AnyView(contenuto.safeAreaPadding(
+            EdgeInsets(top: bordi.top, leading: bordi.left, bottom: bordi.bottom, trailing: bordi.right))))))
+        ospite.apparso = apparso
         ospite.safeAreaRegions = []
         ospite.modalPresentationStyle = .fullScreen
         ospite.chiuso = { [weak self] in self?.dati.azioni.aperto(false) }
