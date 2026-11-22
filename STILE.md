@@ -46,6 +46,8 @@ Si usano sempre questi. Non si scrivono colori, caratteri o tempi a mano nelle s
   password è centrato e prende il bordo arancio quando è attivo. Il tasto Apri si riempie
   mentre controlla. Se la password è sbagliata o corta, il campo trema. In orizzontale le
   due metà stanno affiancate.
+  Finché non arriva il primo pacchetto vero, il Visore ricorda la prova con le foto finte e
+  la apre con Face ID. Con il primo pacchetto vero la prova sparisce.
 - **Barra in basso**: una pillola che galleggia, con solo **Foto, Nodi, Persone**. La macchia
   arancio scivola sulla sezione scelta. Toccare di nuovo la sezione in cui sei riporta alla
   prima pagina o in cima. Durante «Scegli» la barra sparisce.

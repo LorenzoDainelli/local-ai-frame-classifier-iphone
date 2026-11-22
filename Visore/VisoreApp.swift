@@ -1,3 +1,4 @@
+import LocalAuthentication
 import SwiftUI
 import UIKit
 import VisoreKit
@@ -191,7 +192,30 @@ final class StatoVisore: ObservableObject {
     func rientro() {
         guard pacchetto == nil, faceIDDaChiedere, !occupato else { return }
         faceIDDaChiedere = false
+        if StatoVisore.inProva {
+            apriProvaConFaceID()
+            return
+        }
         apriConFaceID()
+    }
+
+    nonisolated static let chiaveProva = "visore.prova"
+    nonisolated static let passwordProva = "tre parole che ricordi"
+
+    static var inProva: Bool {
+        !Deposito.c_e && UserDefaults.standard.bool(forKey: chiaveProva)
+    }
+
+    func apriProvaConFaceID() {
+        let contesto = LAContext()
+        contesto.localizedFallbackTitle = ""
+        var problema: NSError?
+        guard contesto.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &problema) else { return }
+        contesto.evaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, localizedReason: "Apri le foto finte") { ok, _ in
+            Task { @MainActor in
+                if ok { self.apriProva(password: StatoVisore.passwordProva) }
+            }
+        }
     }
 
     func apriConFaceID() {
@@ -248,7 +272,7 @@ struct Sblocco: View {
     @State private var password = ""
     @State private var cartella: URL?
     @State private var scegli = false
-    @State private var prova = false
+    @AppStorage(StatoVisore.chiaveProva) private var prova = false
     @State private var trema = 0
     @FocusState private var scrive: Bool
     @Environment(\.verticalSizeClass) private var altezza
@@ -274,6 +298,13 @@ struct Sblocco: View {
                 .frame(maxWidth: .infinity, minHeight: g.size.height)
             }
             .scrollBounceBehavior(.basedOnSize)
+            .onAppear {
+                if Deposito.c_e {
+                    prova = false
+                } else if prova {
+                    password = StatoVisore.passwordProva
+                }
+            }
             .scrollDismissesKeyboard(.interactively)
         }
         .background(Tinta.fondo.ignoresSafeArea())
@@ -348,6 +379,11 @@ struct Sblocco: View {
                       lavora: stato.occupato,
                       spento: (!prova && cartella == nil && !Deposito.c_e) || password.count < 8 || stato.occupato,
                       azione: apri)
+            if prova && !Deposito.c_e {
+                Button { stato.apriProvaConFaceID() } label: { Label("Apri con Face ID", systemImage: "faceid") }
+                    .buttonStyle(TastoBordo())
+                    .disabled(stato.occupato)
+            }
             if !prova && Portachiavi.c_e && !Portachiavi.scaduta() {
                 Button { stato.apriConFaceID() } label: { Label("Apri con Face ID", systemImage: "faceid") }
                     .buttonStyle(TastoBordo())
@@ -356,7 +392,7 @@ struct Sblocco: View {
             if !Deposito.c_e {
                 Button(prova ? "Torna al mio pacchetto" : "Prova con le foto finte") {
                     withAnimation(Moto.passo) { prova.toggle() }
-                    password = prova ? "tre parole che ricordi" : ""
+                    password = prova ? StatoVisore.passwordProva : ""
                 }
                 .font(.system(size: 14))
                 .foregroundStyle(Tinta.tenue)
