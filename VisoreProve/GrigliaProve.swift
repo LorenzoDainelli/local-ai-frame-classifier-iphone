@@ -24,6 +24,10 @@ final class GrigliaProve: XCTestCase {
         add(a)
     }
 
+    private func foto(_ griglia: XCUIElement, _ n: Int) -> XCUIElement {
+        griglia.images.matching(NSPredicate(format: "label == 'Foto'")).element(boundBy: n)
+    }
+
     private func togliAvvisi() {
         let trampolino = XCUIApplication(bundleIdentifier: "com.apple.springboard")
         for nome in ["Don’t Allow", "Don't Allow", "Non consentire"] {
@@ -64,7 +68,7 @@ final class GrigliaProve: XCTestCase {
         griglia.pinch(withScale: 0.3, velocity: -2)
         sleep(1)
         scatta("6-di-nuovo-piccola")
-        let cella = griglia.cells.firstMatch
+        let cella = foto(griglia, 0)
         XCTAssertTrue(cella.waitForExistence(timeout: 10))
         cella.tap()
         sleep(2)
@@ -91,7 +95,7 @@ final class GrigliaProve: XCTestCase {
         let griglia = apri()
         app.buttons["Scegli"].firstMatch.tap()
         sleep(1)
-        griglia.cells.element(boundBy: 0).tap()
+        foto(griglia, 0).tap()
         sleep(1)
         scatta("10-scelta")
         app.buttons["Annulla"].firstMatch.tap()
@@ -108,7 +112,7 @@ final class GrigliaProve: XCTestCase {
         griglia.pinch(withScale: 0.5, velocity: -1)
         sleep(1)
         scatta("13-tre-per-riga")
-        let prima = griglia.cells.element(boundBy: 0)
+        let prima = foto(griglia, 0)
         descrivi("gerarchia-prima-del-tocco")
         prima.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
         sleep(3)
