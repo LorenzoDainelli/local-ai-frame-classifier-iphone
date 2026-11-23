@@ -119,6 +119,109 @@ struct Salta: ViewModifier {
     }
 }
 
+struct TestaFoglio: View {
+    let titolo: String
+    let sotto: String
+    let chiudi: () -> Void
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(titolo).font(Carattere.titolo).foregroundStyle(Tinta.ink)
+                Text(sotto).font(.system(size: 13)).foregroundStyle(Tinta.tenue)
+            }
+            Spacer(minLength: 8)
+            Tondo(simbolo: "xmark", etichetta: "Chiudi", azione: chiudi)
+        }
+        .padding(.top, 22)
+        .padding(.bottom, 4)
+    }
+}
+
+struct TitolettoFoglio: View {
+    let testo: String
+    var azione: (String, () -> Void)? = nil
+
+    var body: some View {
+        HStack {
+            Text(testo.uppercased()).etichettaMaiuscola()
+            Spacer(minLength: 8)
+            if let azione {
+                Button(azione.0, action: azione.1)
+                    .font(.system(size: 13.5, weight: .semibold))
+                    .foregroundStyle(Tinta.accento)
+                    .transition(.opacity.combined(with: .scale(scale: 0.9)))
+            }
+        }
+        .animation(Moto.passo, value: azione?.0)
+        .padding(.horizontal, 2)
+        .padding(.top, 22)
+        .padding(.bottom, 8)
+    }
+}
+
+struct Interruttore: View {
+    let nome: String
+    var nota: String? = nil
+    @Binding var valore: Bool
+
+    var body: some View {
+        Toggle(isOn: $valore) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(nome).font(.system(size: 15)).foregroundStyle(Tinta.ink)
+                if let nota {
+                    Text(nota).font(.system(size: 12.5)).foregroundStyle(Tinta.tenue)
+                }
+            }
+        }
+        .tint(Tinta.bene)
+        .padding(.vertical, 10)
+    }
+}
+
+struct NotaFoglio: View {
+    let testo: String
+
+    var body: some View {
+        Text(testo)
+            .font(.system(size: 12.5)).foregroundStyle(Tinta.tenue)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.top, 8).padding(.horizontal, 2)
+    }
+}
+
+struct Conteggio: View {
+    let quanti: Int
+    let testo: String
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            Text(Testi.numero(quanti))
+                .font(Carattere.serif(21, .title3))
+                .foregroundStyle(quanti == 0 ? Tinta.male : Tinta.ink)
+                .monospacedDigit()
+                .contentTransition(.numericText(value: Double(quanti)))
+            Text(testo)
+                .font(.system(size: 13)).foregroundStyle(Tinta.tenue)
+        }
+    }
+}
+
+extension View {
+    func cartaFoglio() -> some View {
+        background(Tinta.fondo, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(Tinta.linea, lineWidth: 0.5))
+    }
+
+    func piedeFoglio() -> some View {
+        padding(.horizontal, 18)
+            .padding(.top, 10)
+            .padding(.bottom, 8)
+            .background(.ultraThinMaterial)
+            .overlay(alignment: .top) { Divider().overlay(Tinta.linea) }
+    }
+}
+
 struct TastoCasuale: View {
     var lato: CGFloat = 44
     let azione: () -> Void
@@ -184,6 +287,7 @@ struct TesseraTipo: View {
     let quanti: Int?
     let acceso: Bool
     let trema: Int
+    var stato: String? = nil
     let azione: () -> Void
 
     var body: some View {
@@ -198,7 +302,7 @@ struct TesseraTipo: View {
                     .rotationEffect(.degrees(acceso ? -6 : 0))
                     .padding(.bottom, 6)
                 Text(nome).font(.system(size: 15, weight: .semibold)).foregroundStyle(Tinta.ink)
-                Text(quanti.map(Testi.numero) ?? " ")
+                Text(stato ?? quanti.map(Testi.numero) ?? " ")
                     .font(.system(size: 12)).foregroundStyle(Tinta.tenue)
                     .monospacedDigit()
                     .contentTransition(.numericText(value: Double(quanti ?? 0)))
@@ -218,7 +322,7 @@ struct TesseraTipo: View {
         .modifier(Salta(acceso: acceso))
         .animation(Moto.molla, value: acceso)
         .accessibilityLabel(nome)
-        .accessibilityValue(quanti.map { Tipi.scatti($0) } ?? "")
+        .accessibilityValue(stato ?? quanti.map { Tipi.scatti($0) } ?? "")
         .accessibilityAddTraits(acceso ? .isSelected : [])
     }
 }
@@ -273,23 +377,20 @@ struct SceltaCasuale: View {
                 if !anni.isEmpty { sezioneAnni }
                 titoletto("Come")
                 VStack(spacing: 0) {
-                    interruttore("Prima i preferiti", "I cuori escono per primi", $ricetta.primaICuori)
+                    Interruttore(nome: "Prima i preferiti", nota: "I cuori escono per primi", valore: $ricetta.primaICuori)
                     Divider().overlay(Tinta.linea)
-                    interruttore("Video con l'audio", "Il suono sale piano, senza spaventare", $ricetta.audio)
+                    Interruttore(nome: "Video con l'audio", nota: "Il suono sale piano, senza spaventare", valore: $ricetta.audio)
                     Divider().overlay(Tinta.linea)
-                    interruttore("Ricomincia alla fine", "Rimescola e riparte da solo", $ricetta.ricomincia)
+                    Interruttore(nome: "Ricomincia alla fine", nota: "Rimescola e riparte da solo", valore: $ricetta.ricomincia)
                 }
                 .padding(.horizontal, 14)
-                .background(Tinta.fondo, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(Tinta.linea, lineWidth: 0.5))
+                .cartaFoglio()
                 titoletto("Ogni foto resta")
                 Picker("Ogni foto resta", selection: $ricetta.ritmo) {
                     ForEach([3.0, 5.0, 8.0], id: \.self) { Text("\(Int($0)) secondi").tag($0) }
                 }
                 .pickerStyle(.segmented)
-                Text("Le Live restano almeno 4 secondi, i video quanto durano (fino a 14).")
-                    .font(.system(size: 12.5)).foregroundStyle(Tinta.tenue)
-                    .padding(.top, 8).padding(.horizontal, 2)
+                NotaFoglio(testo: "Le Live restano almeno 4 secondi, i video quanto durano (fino a 14).")
             }
             .padding(.horizontal, 18)
             .padding(.bottom, 24)
@@ -311,17 +412,8 @@ struct SceltaCasuale: View {
     }
 
     private var testa: some View {
-        HStack(alignment: .top, spacing: 12) {
-            VStack(alignment: .leading, spacing: 3) {
-                Text(vivo ? "Cambia la scelta" : "A caso").font(Carattere.titolo).foregroundStyle(Tinta.ink)
-                Text(vivo ? "La mostra continua con la nuova scelta." : "Scegli cosa mescolare. Senza scelte, tutto.")
-                    .font(.system(size: 13)).foregroundStyle(Tinta.tenue)
-            }
-            Spacer(minLength: 8)
-            Tondo(simbolo: "xmark", etichetta: "Chiudi") { chiudi() }
-        }
-        .padding(.top, 22)
-        .padding(.bottom, 4)
+        TestaFoglio(titolo: vivo ? "Cambia la scelta" : "A caso",
+                    sotto: vivo ? "La mostra continua con la nuova scelta." : "Scegli cosa mescolare. Senza scelte, tutto.") { chiudi() }
     }
 
     private var sezioneNodi: some View {
@@ -333,8 +425,7 @@ struct SceltaCasuale: View {
                     rigaNodo(n).entra(apparso, i + 3, piano)
                 }
             }
-            .background(Tinta.fondo, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(Tinta.linea, lineWidth: 0.5))
+            .cartaFoglio()
         }
     }
 
@@ -435,15 +526,7 @@ struct SceltaCasuale: View {
 
     private var piede: some View {
         VStack(spacing: 9) {
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text(Testi.numero(quanti))
-                    .font(Carattere.serif(21, .title3))
-                    .foregroundStyle(quanti == 0 ? Tinta.male : Tinta.ink)
-                    .monospacedDigit()
-                    .contentTransition(.numericText(value: Double(quanti)))
-                Text(quanti == 1 ? "scatto da mescolare" : "scatti da mescolare")
-                    .font(.system(size: 13)).foregroundStyle(Tinta.tenue)
-            }
+            Conteggio(quanti: quanti, testo: quanti == 1 ? "scatto da mescolare" : "scatti da mescolare")
             .modifier(Trema(volte: tremaZero))
             .animation(Moto.passo, value: quanti)
             .accessibilityElement(children: .combine)
@@ -455,11 +538,7 @@ struct SceltaCasuale: View {
             .shadow(color: Tinta.accento.opacity(quanti == 0 ? 0 : 0.32), radius: 12, y: 8)
             .disabled(quanti == 0)
         }
-        .padding(.horizontal, 18)
-        .padding(.top, 10)
-        .padding(.bottom, 8)
-        .background(.ultraThinMaterial)
-        .overlay(alignment: .top) { Divider().overlay(Tinta.linea) }
+        .piedeFoglio()
     }
 
     private var lama: some View {
@@ -473,31 +552,7 @@ struct SceltaCasuale: View {
     }
 
     private func titoletto(_ testo: String, _ azione: (String, () -> Void)? = nil) -> some View {
-        HStack {
-            Text(testo.uppercased()).etichettaMaiuscola()
-            Spacer(minLength: 8)
-            if let azione {
-                Button(azione.0, action: azione.1)
-                    .font(.system(size: 13.5, weight: .semibold))
-                    .foregroundStyle(Tinta.accento)
-                    .transition(.opacity.combined(with: .scale(scale: 0.9)))
-            }
-        }
-        .animation(Moto.passo, value: azione?.0)
-        .padding(.horizontal, 2)
-        .padding(.top, 22)
-        .padding(.bottom, 8)
-    }
-
-    private func interruttore(_ nome: String, _ nota: String, _ valore: Binding<Bool>) -> some View {
-        Toggle(isOn: valore) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(nome).font(.system(size: 15)).foregroundStyle(Tinta.ink)
-                Text(nota).font(.system(size: 12.5)).foregroundStyle(Tinta.tenue)
-            }
-        }
-        .tint(Tinta.bene)
-        .padding(.vertical, 10)
+        TitolettoFoglio(testo: testo, azione: azione)
     }
 
     private func cambia(_ fai: (inout Mescola) -> Void) {

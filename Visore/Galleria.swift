@@ -746,8 +746,18 @@ struct Impostazioni: View {
     @AppStorage("visore.proporzioni") private var proporzioni = false
     @EnvironmentObject var cassetto: Cassetto
     @Environment(\.dismiss) private var chiudi
+    @Environment(\.accessibilityReduceMotion) private var piano
     @AppStorage(Giro.chiave) private var giroVisto = false
     @AppStorage(Vetro.chiave) private var vetro = true
+    @StateObject private var avvisi = Annunci()
+    @State private var quanti: Int
+    @State private var tremaVetro = 0
+    @State private var apparso = false
+
+    init(pacchetto: Pacchetto) {
+        self.pacchetto = pacchetto
+        _quanti = State(initialValue: (try? pacchetto.archivio.quanti()) ?? 0)
+    }
 
     private var notaVetro: String {
         if !Vetro.vero(true) {
@@ -761,16 +771,26 @@ struct Impostazioni: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 22) {
-                HStack {
-                    Text("Impostazioni").font(Carattere.titolo).foregroundStyle(Tinta.ink)
-                    Spacer()
-                    Button("Fine") { chiudi() }
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(Tinta.accento)
+            VStack(alignment: .leading, spacing: 0) {
+                TestaFoglio(titolo: "Impostazioni", sotto: "Come si vede e come si protegge il Visore.") { chiudi() }
+                TitolettoFoglio(testo: "Aspetto")
+                HStack(spacing: 8) {
+                    TesseraTipo(nome: "Vetro liquido", simbolo: "drop.halffull", quanti: nil,
+                                acceso: vetro && Vetro.vero(true), trema: tremaVetro,
+                                stato: !Vetro.vero(true) ? "Non c'è" : vetro ? "Acceso" : "Spento") { cambiaVetro() }
+                        .opacity(Vetro.vero(true) ? 1 : 0.55)
+                        .entra(apparso, 0, piano)
+                    TesseraTipo(nome: "Proporzioni vere", simbolo: "rectangle.grid.3x2", quanti: nil,
+                                acceso: proporzioni, trema: 0,
+                                stato: proporzioni ? "Accese" : "Spente") { proporzioni.toggle() }
+                        .entra(apparso, 1, piano)
                 }
-                .padding(.top, 18)
-                GruppoImpostazioni(titolo: "Firma") {
+                NotaFoglio(testo: notaVetro)
+                    .contentTransition(.opacity)
+                    .animation(Moto.passo, value: vetro)
+                NotaFoglio(testo: "Spento: miniature quadrate, piene. Acceso: ogni foto con la sua forma, dentro il suo quadrato. "
+                           + "Pizzica la griglia: 1, 3, 5, 15 o 31 foto per riga. A 15 si vedono i mesi, a 31 gli anni.")
+                gruppo("Firma", 2) {
                     if let scade = Firma.scadenza() {
                         Text(Firma.aParole(fino: scade)).font(Carattere.piccolo).foregroundStyle(Tinta.ink)
                             .padding(.top, 11)
@@ -778,25 +798,11 @@ struct Impostazioni: View {
                     Spiegazione(testo: "Si rinnova con AltStore, avviando AltServer sul portatile. Rinnovare non tocca niente. "
                                 + "Cancellare l'app e rimetterla porta via il pacchetto: andrebbe ricopiato tutto dal PC.")
                 }
-                GruppoImpostazioni(titolo: "Aspetto", nota: notaVetro) {
-                    Toggle(isOn: $vetro.animation(Moto.scena)) {
-                        Text("Vetro liquido").font(.system(size: 15)).foregroundStyle(Tinta.ink)
-                    }
-                    .padding(.vertical, 6)
-                    .disabled(!Vetro.vero(true))
-                }
-                GruppoImpostazioni(titolo: "Griglia",
-                                   nota: "Spento: miniature quadrate, piene. Acceso: ogni foto con la sua forma, dentro il suo quadrato. "
-                                       + "Pizzica la griglia: 1, 3, 5, 15 o 31 foto per riga. A 15 si vedono i mesi, a 31 gli anni.") {
-                    Toggle(isOn: $proporzioni) { Text("Proporzioni vere").font(.system(size: 15)).foregroundStyle(Tinta.ink) }
-                        .tint(Tinta.accento)
-                        .padding(.vertical, 6)
-                }
-                GruppoImpostazioni(titolo: "Blocco") {
+                gruppo("Blocco", 3) {
                     Spiegazione(testo: "Il Visore si chiude appena esci o cambi app, e al rientro chiede Face ID. "
                                 + "La password torna ogni 7 giorni, dopo un riavvio e dopo 5 Face ID falliti.")
                 }
-                GruppoImpostazioni(titolo: "Riservatezza") {
+                gruppo("Riservatezza", 4) {
                     Spiegazione(testo: "Se lo schermo viene registrato o duplicato, il Visore si copre. Negli screenshot "
                                 + "esce nero. È una difesa parziale: una seconda fotocamera la supera.")
                     Divider().overlay(Tinta.linea)
@@ -809,20 +815,20 @@ struct Impostazioni: View {
                         VoceImpostazione(nome: "Diario", valore: "ancora vuoto")
                     }
                 }
-                GruppoImpostazioni(titolo: "Foto aperta") {
+                gruppo("Foto aperta", 5) {
                     Spiegazione(testo: "Un tocco nasconde e rimostra tutto. Tieni premuto su una live photo: si muove finché tieni. "
                                 + "Due tocchi mettono il cuore. In basso le miniature di prima e dopo: toccane una per saltarci. "
                                 + "Giù di scatto chiude, su mostra le informazioni.")
                 }
-                GruppoImpostazioni(titolo: "A caso") {
+                gruppo("A caso", 6) {
                     Spiegazione(testo: "Il tasto arancio con le frecce, accanto all'ingranaggio, mescola foto, Live e video. "
                                 + "Scegli tipo, nodi, persone e anni, poi guarda. Tocca a destra o a sinistra per andare "
                                 + "avanti o indietro, al centro per nascondere i comandi. Tieni premuto per fermare, "
                                 + "due tocchi mettono il cuore, giù chiude.")
                 }
-                GruppoImpostazioni(titolo: "Pacchetto") {
+                gruppo("Pacchetto", 7) {
                     let info = pacchetto.archivio.informazioni()
-                    VoceImpostazione(nome: "Foto e video", valore: Testi.numero((try? pacchetto.archivio.quanti()) ?? 0))
+                    VoceImpostazione(nome: "Foto e video", valore: Testi.numero(quanti))
                     if let fatto = info["fatto_il"] { VoceImpostazione(nome: "Fatto il", valore: Testi.istante(fatto)) }
                     if let n = info["nuove_ultimo_travaso"], let quante = Int(n), quante > 0 {
                         VoceImpostazione(nome: "Nuove nell'ultima copia", valore: Testi.numero(quante))
@@ -831,23 +837,63 @@ struct Impostazioni: View {
                     VoceImpostazione(nome: "Visore",
                                      valore: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "")
                 }
-                Button("Rivedi il giro di benvenuto") {
-                    chiudi()
-                    giroVisto = false
-                }
-                .buttonStyle(TastoBordo())
-                GruppoImpostazioni(titolo: "Licenze") {
+                gruppo("Licenze", 8) {
                     Spiegazione(testo: "SQLite: pubblico dominio. Crittografia: CryptoKit di Apple, compresa nel sistema. "
                                 + "Carattere Source Serif 4: SIL Open Font License. "
                                 + "Il resto del Visore è scritto per questo progetto e non usa librerie di altri.")
                 }
             }
             .padding(.horizontal, 18)
-            .padding(.bottom, 30)
+            .padding(.bottom, 24)
             .frame(maxWidth: 640)
             .frame(maxWidth: .infinity)
         }
         .scrollIndicators(.hidden)
+        .safeAreaInset(edge: .bottom, spacing: 0) { piede }
+        .modifier(ConAnnunci(annunci: avvisi, sopra: 140))
+        .sensoryFeedback(.selection, trigger: vetro)
+        .sensoryFeedback(.selection, trigger: proporzioni)
+        .sensoryFeedback(.warning, trigger: tremaVetro)
+        .task { apparso = true }
+    }
+
+    private func gruppo<Dentro: View>(_ titolo: String, _ i: Int, @ViewBuilder _ dentro: () -> Dentro) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            TitolettoFoglio(testo: titolo)
+            VStack(alignment: .leading, spacing: 0) { dentro() }
+                .padding(.horizontal, 14)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .cartaFoglio()
+        }
+        .entra(apparso, i, piano)
+    }
+
+    private var piede: some View {
+        VStack(spacing: 9) {
+            Conteggio(quanti: quanti, testo: quanti == 1 ? "scatto nel pacchetto" : "scatti nel pacchetto")
+                .accessibilityElement(children: .combine)
+            Button {
+                chiudi()
+                giroVisto = false
+            } label: {
+                Label("Rivedi il giro di benvenuto", systemImage: "sparkles")
+            }
+            .buttonStyle(TastoPieno())
+            .shadow(color: Tinta.accento.opacity(0.32), radius: 12, y: 8)
+        }
+        .frame(maxWidth: 640)
+        .frame(maxWidth: .infinity)
+        .piedeFoglio()
+    }
+
+    private func cambiaVetro() {
+        guard Vetro.vero(true) else {
+            tremaVetro += 1
+            avvisi.di(UIAccessibility.isReduceTransparencyEnabled ? "Spento da «Riduci trasparenza»" : "Serve iOS 26",
+                      simbolo: "exclamationmark.circle")
+            return
+        }
+        withAnimation(Moto.scena) { vetro.toggle() }
     }
 }
 

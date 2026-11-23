@@ -119,8 +119,10 @@ Si usano sempre questi. Non si scrivono colori, caratteri o tempi a mano nelle s
   trovate (persone, nodi, luoghi, anni), poi la griglia.
 - **Raccolte**: «Preferiti» in una carta a parte, poi le tue raccolte. Tenendo premuto si
   rinomina o si elimina.
-- **Impostazioni**: un foglio con le carte a gruppi (Firma, Griglia, Blocco, Riservatezza,
-  Foto aperta, Pacchetto, Licenze) e «Fine» in alto.
+- **Impostazioni**: foglio con la stessa grafica di «A caso»: titolo con riga sotto e tondo
+  con la X, in cima due tessere (Vetro liquido, Proporzioni vere), poi le carte a gruppi
+  (Firma, Blocco, Riservatezza, Foto aperta, A caso, Pacchetto, Licenze) che entrano una dopo
+  l'altra, e in basso una barra di vetro col numero di scatti e «Rivedi il giro di benvenuto».
 - **Giro di benvenuto**: l'icona in un quadrato arancio leggero, il titolo serif, i puntini
   che si allungano e il tasto pieno arancio.
 
