@@ -220,6 +220,10 @@ final class StatoVisore: ObservableObject {
 
     func apriConFaceID() {
         guard Deposito.c_e || Portachiavi.cartella() != nil else { return }
+        guard !Deposito.inArrivo else {
+            avviso = "Il pacchetto sta ancora arrivando dal computer: aspetta che finisca."
+            return
+        }
         guard Portachiavi.c_e, !Portachiavi.scaduta() else {
             if Portachiavi.c_e {
                 Portachiavi.dimenticaPassword()
@@ -227,7 +231,7 @@ final class StatoVisore: ObservableObject {
             }
             return
         }
-        let sorgente = Portachiavi.cartella()
+        let sorgente = Deposito.dalCavo ? nil : Portachiavi.cartella()
         Task.detached(priority: .userInitiated) {
             let lettura = Portachiavi.leggi()
             await MainActor.run {
@@ -272,6 +276,8 @@ struct Sblocco: View {
     @State private var password = ""
     @State private var cartella: URL?
     @State private var scegli = false
+    @State private var arriva = Deposito.inArrivo
+    @State private var pronto = Deposito.c_e
     @AppStorage(StatoVisore.chiaveProva) private var prova = false
     @State private var trema = 0
     @FocusState private var scrive: Bool
@@ -313,6 +319,23 @@ struct Sblocco: View {
         .fileImporter(isPresented: $scegli, allowedContentTypes: [.folder]) { esito in
             if case .success(let url) = esito { cartella = url }
         }
+        .task {
+            while !Task.isCancelled {
+                guardaIlDeposito()
+                try? await Task.sleep(for: .seconds(2))
+            }
+        }
+    }
+
+    private func guardaIlDeposito() {
+        let nuovoArriva = Deposito.inArrivo
+        let nuovoPronto = Deposito.c_e
+        guard nuovoArriva != arriva || nuovoPronto != pronto else { return }
+        withAnimation(Moto.passo) {
+            arriva = nuovoArriva
+            pronto = nuovoPronto
+            if nuovoPronto && !nuovoArriva { prova = false }
+        }
     }
 
     private func marchio(allineato: HorizontalAlignment) -> some View {
@@ -340,13 +363,23 @@ struct Sblocco: View {
             if prova {
                 Text("Prova con 5 foto finte. La password è già scritta: è la frase «tre parole che ricordi». Tocca Apri.")
                     .font(.system(size: 14)).foregroundStyle(Tinta.tenue).multilineTextAlignment(.center)
-            } else if !Deposito.c_e || cartella != nil {
+            } else if let cartella {
                 Button { scegli = true } label: {
-                    Label(cartella?.lastPathComponent ?? "Scegli la cartella del pacchetto",
-                          systemImage: cartella == nil ? "folder" : "folder.fill")
+                    Label(cartella.lastPathComponent, systemImage: "folder.fill")
                         .lineLimit(1)
                 }
                 .buttonStyle(TastoBordo())
+            } else if arriva {
+                HStack(spacing: 8) {
+                    ProgressView()
+                    Text("Il pacchetto sta arrivando dal computer col cavo.")
+                        .font(.system(size: 14)).foregroundStyle(Tinta.tenue)
+                }
+                Text("Lascia l'iPhone attaccato e sbloccato: quando ha finito si apre qui.")
+                    .font(.system(size: 14)).foregroundStyle(Tinta.tenue).multilineTextAlignment(.center)
+            } else if !pronto {
+                Text("Attacca l'iPhone al computer col cavo e premi «Prepara e copia col cavo»: il pacchetto arriva qui da solo.")
+                    .font(.system(size: 14)).foregroundStyle(Tinta.tenue).multilineTextAlignment(.center)
             }
             SecureField("", text: $password, prompt: Text("Password del forziere").foregroundStyle(Tinta.tenue))
                 .textContentType(.password)
@@ -377,7 +410,7 @@ struct Sblocco: View {
                 }
             TastoApri(fino: prova ? nil : stato.attesaFino,
                       lavora: stato.occupato,
-                      spento: (!prova && cartella == nil && !Deposito.c_e) || password.count < 8 || stato.occupato,
+                      spento: (!prova && cartella == nil && (!pronto || arriva)) || password.count < 8 || stato.occupato,
                       azione: apri)
             if prova && !Deposito.c_e {
                 Button { stato.apriProvaConFaceID() } label: { Label("Apri con Face ID", systemImage: "faceid") }
@@ -389,7 +422,14 @@ struct Sblocco: View {
                     .buttonStyle(TastoBordo())
                     .disabled(stato.occupato)
             }
-            if !Deposito.c_e {
+            if !prova && !pronto && !arriva && cartella == nil {
+                Button("Il pacchetto è in un'altra cartella") { scegli = true }
+                    .font(.system(size: 14))
+                    .foregroundStyle(Tinta.tenue)
+                    .underline()
+                    .disabled(stato.occupato)
+            }
+            if !pronto {
                 Button(prova ? "Torna al mio pacchetto" : "Prova con le foto finte") {
                     withAnimation(Moto.passo) { prova.toggle() }
                     password = prova ? StatoVisore.passwordProva : ""
@@ -429,8 +469,9 @@ struct Sblocco: View {
             stato.apriProva(password: password)
             return
         }
-        guard cartella != nil || Deposito.c_e else { return }
-        stato.apri(sorgente: cartella ?? Portachiavi.cartella(), password: password, scritta: true)
+        guard cartella != nil || (pronto && !arriva) else { return }
+        stato.apri(sorgente: cartella ?? (Deposito.dalCavo ? nil : Portachiavi.cartella()),
+                   password: password, scritta: true)
     }
 }
 

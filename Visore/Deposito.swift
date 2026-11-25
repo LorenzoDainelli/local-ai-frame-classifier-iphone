@@ -43,6 +43,24 @@ enum Deposito {
         FileManager.default.fileExists(atPath: interna.appendingPathComponent("visore.json").path)
     }
 
+    static var dalCavo: Bool {
+        FileManager.default.fileExists(atPath: interna.appendingPathComponent(".cavo.json").path)
+    }
+
+    static var completo: Bool {
+        guard let dati = try? Data(contentsOf: interna.appendingPathComponent("visore.json")),
+              let carta = try? JSONSerialization.jsonObject(with: dati) as? [String: Any] else { return false }
+        return carta["stato"] as? String == "completo"
+    }
+
+    static var inArrivo: Bool {
+        guard !completo else { return false }
+        let fm = FileManager.default
+        if dalCavo || fm.fileExists(atPath: interna.appendingPathComponent("visore.json").path) { return true }
+        let dentro = (try? fm.contentsOfDirectory(atPath: interna.path)) ?? []
+        return !dentro.isEmpty
+    }
+
     static func serveAggiornare(da sorgente: URL) -> Bool {
         guard let nuova = try? Data(contentsOf: sorgente.appendingPathComponent("visore.json")) else { return false }
         let vecchia = try? Data(contentsOf: interna.appendingPathComponent("visore.json"))

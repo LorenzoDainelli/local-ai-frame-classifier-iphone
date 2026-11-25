@@ -19,11 +19,14 @@ SideStore o AltStore, che lo firmano con il tuo ID Apple.
 
 ## Dove sta il pacchetto
 
-La prima volta si sceglie la cartella del pacchetto in File. Il Visore la
-copia in una sua cartella privata, che non compare in File e non va nel
-backup di iCloud, e da lì la legge. La cartella scelta resta ricordata: a
-ogni apertura, se dentro c'è un pacchetto nuovo, il Visore lo ricopia da
-solo. Se la cartella non c'è più, apre l'ultima copia.
+Il pacchetto arriva da solo dal computer col cavo, nella cartella privata del
+Visore, che non va nel backup di iCloud. Mentre arriva, il Visore lo dice e
+aspetta; quando ha finito si apre con la password. Non c'è niente da scegliere.
+
+Se il pacchetto sta invece in File, sotto la password c'è «Il pacchetto è in
+un'altra cartella». Il Visore la copia nella sua cartella privata e la
+ricorda: a ogni apertura, se dentro c'è un pacchetto nuovo, lo ricopia da
+solo. Se il pacchetto è arrivato col cavo, la cartella di File non conta più.
 
 ## Face ID
 
