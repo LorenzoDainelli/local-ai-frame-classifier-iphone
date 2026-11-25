@@ -278,6 +278,7 @@ struct Sblocco: View {
     @State private var scegli = false
     @State private var arriva = Deposito.inArrivo
     @State private var pronto = Deposito.c_e
+    @State private var sveglio = false
     @AppStorage(StatoVisore.chiaveProva) private var prova = false
     @State private var trema = 0
     @FocusState private var scrive: Bool
@@ -320,17 +321,31 @@ struct Sblocco: View {
             if case .success(let url) = esito { cartella = url }
         }
         .task {
+            proteggi()
             while !Task.isCancelled {
                 guardaIlDeposito()
                 try? await Task.sleep(for: .seconds(2))
             }
         }
+        .onDisappear { tieniSveglio(false) }
+    }
+
+    private func proteggi() {
+        Task.detached(priority: .utility) { Deposito.proteggi() }
+    }
+
+    private func tieniSveglio(_ si: Bool) {
+        guard si != sveglio else { return }
+        sveglio = si
+        UIApplication.shared.isIdleTimerDisabled = si
     }
 
     private func guardaIlDeposito() {
         let nuovoArriva = Deposito.inArrivo
         let nuovoPronto = Deposito.c_e
+        tieniSveglio(nuovoArriva)
         guard nuovoArriva != arriva || nuovoPronto != pronto else { return }
+        if nuovoPronto && !nuovoArriva { proteggi() }
         withAnimation(Moto.passo) {
             arriva = nuovoArriva
             pronto = nuovoPronto
@@ -375,7 +390,7 @@ struct Sblocco: View {
                     Text("Il pacchetto sta arrivando dal computer col cavo.")
                         .font(.system(size: 14)).foregroundStyle(Tinta.tenue)
                 }
-                Text("Lascia l'iPhone attaccato e sbloccato: quando ha finito si apre qui.")
+                Text("Lascia l'iPhone attaccato e il Visore aperto: lo schermo resta acceso da solo e quando ha finito si apre qui.")
                     .font(.system(size: 14)).foregroundStyle(Tinta.tenue).multilineTextAlignment(.center)
             } else if !pronto {
                 Text("Attacca l'iPhone al computer col cavo e premi «Prepara e copia col cavo»: il pacchetto arriva qui da solo.")

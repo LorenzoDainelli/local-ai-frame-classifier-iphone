@@ -21,7 +21,13 @@ SideStore o AltStore, che lo firmano con il tuo ID Apple.
 
 Il pacchetto arriva da solo dal computer col cavo, nella cartella privata del
 Visore, che non va nel backup di iCloud. Mentre arriva, il Visore lo dice e
-aspetta; quando ha finito si apre con la password. Non c'è niente da scegliere.
+aspetta, e tiene lo schermo acceso finché la copia non è finita; quando ha
+finito si apre con la password. Non c'è niente da scegliere.
+
+Appena il pacchetto è arrivato intero, il Visore mette su ogni suo file la
+protezione più forte di iOS: con l'iPhone bloccato i file non si leggono
+nemmeno da lì. I file restano comunque cifrati con la password del forziere,
+e la cartella non si vede nell'app File.
 
 Se il pacchetto sta invece in File, sotto la password c'è «Il pacchetto è in
 un'altra cartella». Il Visore la copia nella sua cartella privata e la

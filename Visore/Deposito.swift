@@ -95,5 +95,19 @@ enum Deposito {
         try? fm.setAttributes([.protectionKey: FileProtectionType.complete], ofItemAtPath: interna.path)
     }
 
+    static func proteggi() {
+        let fm = FileManager.default
+        guard completo, !inArrivo,
+              let giro = fm.enumerator(at: interna, includingPropertiesForKeys: [.fileProtectionKey]) else { return }
+        for case let dove as URL in giro {
+            let adesso = try? dove.resourceValues(forKeys: [.fileProtectionKey]).fileProtection
+            if adesso != .complete {
+                try? fm.setAttributes([.protectionKey: FileProtectionType.complete], ofItemAtPath: dove.path)
+            }
+        }
+        try? fm.setAttributes([.protectionKey: FileProtectionType.complete], ofItemAtPath: interna.path)
+        fuoriDalBackup(interna)
+    }
+
     static func scarta(_ nuova: URL) { try? FileManager.default.removeItem(at: nuova) }
 }
