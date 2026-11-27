@@ -29,7 +29,8 @@ Si usano sempre questi. Non si scrivono colori, caratteri o tempi a mano nelle s
   annunci, pillole sopra le foto, testa compatta (sfumata). È il vetro chiaro di iOS, il più
   trasparente. Nella foto aperta anche data e ora stanno in una pillola di vetro. Mai sul contenuto (righe, carte,
   pillole dei filtri). Spento, o con «Riduci trasparenza», o prima di iOS 26: tornano i pezzi
-  pieni di prima. Il tasto A caso diventa vetro arancio.
+  pieni di prima. Il tasto A caso diventa vetro arancio. Tutto il vetro è **vivo** come il
+  pallino delle barre di iOS 26: al tocco si gonfia, fa da lente e rimbalza.
 - **Pezzi**:
   - `Testa`: il titolo grande serif, con «Indietro» sopra quando serve e i tasti tondi a destra.
   - `TestaCompatta`: la barra sottile che compare scorrendo.
@@ -106,6 +107,11 @@ Si usano sempre questi. Non si scrivono colori, caratteri o tempi a mano nelle s
   - due tocchi mettono il cuore grande;
   - giù di scatto chiude, su apre le informazioni;
   - si apre e si chiude con lo zoom dalla miniatura.
+  - **video**: una sola riga di vetro, play/pausa a sinistra, la barra al centro, audio a
+    destra. Il tempo non si vede. La barra è sottile, senza pallino, e scorre liscia (segue
+    ogni fotogramma). Toccandola diventa un po' più spessa, i due tasti spariscono e sopra
+    compaiono a sinistra il tempo passato «00:03,45» e a destra quello che manca «00:05»
+    (arrotondato in su, senza meno). Il dito sposta in modo relativo, l'immagine segue il dito.
 - **Informazioni**: un foglio a metà schermo. In cima giorno, ora e luogo, poi le carte e le
   pillole di persone e nodi, che vanno a capo.
 - **Nodi** (bozza A scelta il 22 novembre 2026, con le righe della bozza B): righe a carta,

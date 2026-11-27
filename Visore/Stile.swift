@@ -607,7 +607,7 @@ struct ConVetro<Forma: Shape>: ViewModifier {
     @ViewBuilder
     func body(content: Content) -> some View {
         if #available(iOS 26.0, *), scelto, !poca {
-            content.glassEffect(Glass.clear.tint(tinta).interactive(interattivo), in: forma)
+            content.glassEffect(Glass.clear.tint(tinta).interactive(), in: forma)
         } else {
             content
                 .background(ripiego, in: forma)

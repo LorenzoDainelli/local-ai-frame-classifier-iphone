@@ -7,7 +7,7 @@ import VisoreKit
 final class VideoCifrato: NSObject, AVAssetResourceLoaderDelegate {
 
     static let schema = "visore-cifrato"
-    private static let pezzo = 512 * 1024
+    private static let pezzo = 256 * 1024
 
     let lettore: LettoreCifrato
     let asset: AVURLAsset
@@ -24,6 +24,9 @@ final class VideoCifrato: NSObject, AVAssetResourceLoaderDelegate {
         asset.resourceLoader.setDelegate(self, queue: coda)
     }
 
+    private var attese: [AVAssetResourceLoadingRequest] = []
+    private var alLavoro = false
+
     func resourceLoader(_ resourceLoader: AVAssetResourceLoader,
                         shouldWaitForLoadingOfRequestedResource richiesta: AVAssetResourceLoadingRequest) -> Bool {
         if let info = richiesta.contentInformationRequest {
@@ -31,29 +34,51 @@ final class VideoCifrato: NSObject, AVAssetResourceLoaderDelegate {
             info.contentLength = Int64(lettore.dimensione)
             info.isByteRangeAccessSupported = true
         }
-        guard let dati = richiesta.dataRequest else {
+        guard richiesta.dataRequest != nil else {
             richiesta.finishLoading()
             return true
         }
-        let inizio = Int(dati.currentOffset != 0 ? dati.currentOffset : dati.requestedOffset)
+        attese.append(richiesta)
+        if !alLavoro {
+            alLavoro = true
+            coda.async { [weak self] in self?.unPasso() }
+        }
+        return true
+    }
+
+    func resourceLoader(_ resourceLoader: AVAssetResourceLoader,
+                        didCancel richiesta: AVAssetResourceLoadingRequest) {
+        attese.removeAll { $0 === richiesta }
+    }
+
+    private func unPasso() {
+        attese.removeAll { $0.isCancelled || $0.isFinished }
+        guard let richiesta = attese.last, let dati = richiesta.dataRequest else {
+            alLavoro = false
+            return
+        }
         let fine = dati.requestsAllDataToEndOfResource
             ? lettore.dimensione
             : min(lettore.dimensione, Int(dati.requestedOffset) + dati.requestedLength)
-        var dove = inizio
-        while dove < fine {
-            if richiesta.isCancelled { return true }
+        let dove = max(Int(dati.currentOffset), Int(dati.requestedOffset))
+        if dove >= fine {
+            attese.removeLast()
+            richiesta.finishLoading()
+        } else {
             do {
                 let pezzo = try lettore.leggi(da: dove, quanti: min(VideoCifrato.pezzo, fine - dove))
-                if pezzo.isEmpty { break }
-                dati.respond(with: pezzo)
-                dove += pezzo.count
+                if pezzo.isEmpty {
+                    attese.removeLast()
+                    richiesta.finishLoading()
+                } else {
+                    dati.respond(with: pezzo)
+                }
             } catch {
+                attese.removeLast()
                 richiesta.finishLoading(with: error)
-                return true
             }
         }
-        richiesta.finishLoading()
-        return true
+        coda.async { [weak self] in self?.unPasso() }
     }
 }
 
@@ -142,15 +167,79 @@ final class Movimento: ObservableObject {
         if let fineGiro { NotificationCenter.default.removeObserver(fineGiro) }
         fineGiro = nil
         lettore.removeAllItems()
+        meta = nil
+        ripartire = false
         inLoop = false
         inCorso = false
     }
 
+    private var meta: CMTime?
+    private var esatta = false
+    private var inViaggio = false
+
     func vaiA(_ s: Double) {
-        lettore.seek(to: CMTime(seconds: s, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero)
+        insegui(s, esatta: true)
     }
 
     var inPausa: Bool { lettore.timeControlStatus != .playing }
+
+    var adesso: Double {
+        if let meta { return meta.seconds }
+        let t = lettore.currentTime()
+        return t.isNumeric ? t.seconds : secondi
+    }
+
+    func fermaPerScorrere() -> Bool {
+        let andava = lettore.timeControlStatus == .playing
+        if andava { lettore.pause() }
+        return andava
+    }
+
+    func guarda(_ s: Double) {
+        insegui(s, esatta: false)
+    }
+
+    func riparti() {
+        ripartire = true
+        if !inViaggio {
+            ripartire = false
+            lettore.play()
+        }
+        objectWillChange.send()
+    }
+
+    private var ripartire = false
+
+    private func insegui(_ s: Double, esatta: Bool) {
+        meta = CMTime(seconds: min(max(0, s), durata), preferredTimescale: 600)
+        self.esatta = esatta
+        if !inViaggio { prossimo() }
+    }
+
+    private func prossimo() {
+        guard let dove = meta else { return }
+        let finale = esatta
+        inViaggio = true
+        let margine = finale ? CMTime.zero : CMTime(value: 1, timescale: 20)
+        lettore.currentItem?.cancelPendingSeeks()
+        lettore.seek(to: dove, toleranceBefore: margine, toleranceAfter: margine) { [weak self] _ in
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    guard let self else { return }
+                    self.inViaggio = false
+                    if let meta = self.meta, meta != dove || self.esatta != finale {
+                        self.prossimo()
+                        return
+                    }
+                    if finale {
+                        self.meta = nil
+                        self.secondi = dove.seconds
+                        if self.ripartire { self.ripartire = false; self.lettore.play() }
+                    }
+                }
+            }
+        }
+    }
 
     func pausaOVai() {
         if lettore.timeControlStatus == .playing { lettore.pause() } else { lettore.play() }

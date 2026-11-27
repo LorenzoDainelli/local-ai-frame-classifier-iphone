@@ -526,53 +526,113 @@ struct ComandiVideo: View {
     @State private var trascino: Double?
 
     var body: some View {
-        VStack(spacing: 4) {
-            Slider(value: Binding(get: { trascino ?? movimento.secondi },
-                                  set: { trascino = $0 }),
-                   in: 0...max(0.1, movimento.durata)) { inizio in
-                if !inizio, let trascino {
-                    movimento.vaiA(trascino)
-                    self.trascino = nil
+        let tocco = trascino != nil
+        VStack(spacing: 6) {
+            if let trascino {
+                HStack(spacing: 0) {
+                    Text(Testi.tempoPreciso(trascino))
+                    Spacer(minLength: 12)
+                    Text(Testi.tempoTondo(max(0, movimento.durata - trascino)))
+                }
+                .font(.system(size: 12, weight: .semibold)).monospacedDigit()
+                .transition(.opacity.combined(with: .offset(y: 6)))
+            }
+            HStack(spacing: 6) {
+                if !tocco {
+                    Button { movimento.pausaOVai() } label: {
+                        Image(systemName: movimento.inPausa ? "play.fill" : "pause.fill")
+                            .font(.system(size: 17))
+                            .contentTransition(.symbolEffect(.replace))
+                            .frame(width: 40, height: 40)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(Premuto(quanto: 0.88))
+                    .accessibilityLabel(movimento.inPausa ? "Avvia" : "Pausa")
+                    .transition(.opacity.combined(with: .scale(scale: 0.7)))
+                }
+                BarraVideo(movimento: movimento, trascino: $trascino)
+                if !tocco {
+                    Button { movimento.muto.toggle() } label: {
+                        Image(systemName: movimento.muto ? "speaker.slash.fill" : "speaker.wave.2.fill")
+                            .font(.system(size: 15))
+                            .contentTransition(.symbolEffect(.replace))
+                            .frame(width: 40, height: 40)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(Premuto(quanto: 0.88))
+                    .accessibilityLabel(movimento.muto ? "Attiva l'audio" : "Togli l'audio")
+                    .transition(.opacity.combined(with: .scale(scale: 0.7)))
                 }
             }
-            .tint(Tinta.arancio)
-            HStack(spacing: 0) {
-                Text(Testi.durata(Int((trascino ?? movimento.secondi) * 1000)))
-                    .frame(width: 56, alignment: .leading)
-                Spacer()
-                Button { movimento.pausaOVai() } label: {
-                    Image(systemName: movimento.inPausa ? "play.fill" : "pause.fill")
-                        .font(.system(size: 18))
-                        .contentTransition(.symbolEffect(.replace))
-                        .frame(width: 44, height: 36)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(Premuto(quanto: 0.88))
-                .accessibilityLabel(movimento.inPausa ? "Avvia" : "Pausa")
-                Button { movimento.muto.toggle() } label: {
-                    Image(systemName: movimento.muto ? "speaker.slash.fill" : "speaker.wave.2.fill")
-                        .font(.system(size: 15))
-                        .contentTransition(.symbolEffect(.replace))
-                        .frame(width: 44, height: 36)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(Premuto(quanto: 0.88))
-                .accessibilityLabel(movimento.muto ? "Attiva l'audio" : "Togli l'audio")
-                Spacer()
-                Text(Testi.durata(Int(movimento.durata * 1000)))
-                    .frame(width: 56, alignment: .trailing)
-            }
-            .font(.system(size: 12, weight: .medium)).monospacedDigit()
         }
+        .animation(Moto.molla, value: tocco)
         .foregroundStyle(Tinta.carta)
-        .padding(.horizontal, 14)
-        .padding(.top, 8)
-        .padding(.bottom, 4)
-        .vetro(RoundedRectangle(cornerRadius: 18, style: .continuous), interattivo: true,
-               ripiego: .ultraThinMaterial, bordo: false)
+        .padding(.horizontal, tocco ? 16 : 6)
+        .padding(.vertical, tocco ? 8 : 2)
+        .vetro(Capsule(), interattivo: true, ripiego: .ultraThinMaterial, bordo: false)
         .environment(\.colorScheme, .dark)
         .frame(maxWidth: 560)
     }
+}
+
+struct BarraVideo: View {
+    @ObservedObject var movimento: Movimento
+    @Binding var trascino: Double?
+    @State private var partenza: Double = 0
+    @State private var andava = false
+
+    var body: some View {
+        GeometryReader { g in
+            TimelineView(.animation) { _ in
+                let durata = max(0.1, movimento.durata)
+                let adesso = trascino ?? movimento.adesso
+                let parte = CGFloat(min(1, max(0, adesso / durata)))
+                let spessa = trascino != nil
+                ZStack(alignment: .leading) {
+                    Capsule().fill(Tinta.carta.opacity(0.26))
+                    Capsule().fill(Tinta.arancio)
+                        .frame(width: max(spessa ? 10 : 5, g.size.width * parte))
+                }
+                .frame(height: spessa ? 10 : 5)
+                .frame(maxHeight: .infinity)
+            }
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { gesto in
+                        let durata = max(0.1, movimento.durata)
+                        if trascino == nil {
+                            partenza = movimento.adesso
+                            andava = movimento.fermaPerScorrere()
+                        }
+                        let nuovo = min(durata, max(0, partenza + Double(gesto.translation.width / max(1, g.size.width)) * durata))
+                        trascino = nuovo
+                        movimento.guarda(nuovo)
+                    }
+                    .onEnded { _ in
+                        if let trascino { movimento.vaiA(trascino) }
+                        if andava { movimento.riparti() }
+                        withAnimation(Moto.molla) { trascino = nil }
+                    }
+            )
+            .animation(Moto.molla, value: trascino != nil)
+        }
+        .frame(height: 40)
+        .sensoryFeedback(.impact(weight: .light), trigger: trascino != nil)
+        .accessibilityElement()
+        .accessibilityLabel("Posizione nel video")
+        .accessibilityValue(Testi.tempoTondo(movimento.secondi))
+        .accessibilityAdjustableAction { verso in
+            let passo = max(1, movimento.durata / 20)
+            let nuovo = movimento.secondi + (verso == .increment ? passo : -passo)
+            movimento.vaiA(min(movimento.durata, max(0, nuovo)))
+        }
+    }
+}
+
+extension Testi {
+    static func tempoPreciso(_ secondi: Double) -> String { TempoVideo.passato(secondi) }
+    static func tempoTondo(_ secondi: Double) -> String { TempoVideo.manca(secondi) }
 }
 
 struct Informazioni: View {
