@@ -44,6 +44,11 @@ jobs:
           ultimo=$(ls -d /Applications/Xcode_26*.app | grep -vi -e beta -e rc | sort -V | tail -1)
           sudo xcode-select -s "$ultimo"
           xcodebuild -version
+      - name: Pacchetto di prova
+        run: |
+          python3 -m venv /tmp/py
+          /tmp/py/bin/pip install --quiet pillow
+          /tmp/py/bin/python strumenti/prepara.py
       - name: Le prove di questo pezzo
         run: |
           filtro=$(python3 strumenti/le_mie_prove.py filtro VisoreKit/Tests VisoreKitTests "${{ matrix.pezzo }}/${{ needs.spazio.outputs.quanti }}")
