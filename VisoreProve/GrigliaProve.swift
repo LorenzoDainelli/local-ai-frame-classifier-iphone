@@ -24,8 +24,53 @@ final class GrigliaProve: XCTestCase {
         add(a)
     }
 
-    private func foto(_ griglia: XCUIElement, _ n: Int) -> XCUIElement {
-        griglia.images.matching(NSPredicate(format: "label == 'Foto'")).element(boundBy: n)
+    private func fotoAlCentro(_ griglia: XCUIElement) -> XCUIElement {
+        let tutte = griglia.images.matching(NSPredicate(format: "label == 'Foto'"))
+        let quadro = griglia.frame
+        let centro = CGPoint(x: quadro.midX, y: quadro.minY + quadro.height * 0.55)
+        var scelta = tutte.element(boundBy: 0)
+        var meglio = CGFloat.greatestFiniteMagnitude
+        for n in 0..<min(tutte.count, 60) {
+            let una = tutte.element(boundBy: n)
+            let f = una.frame
+            guard f.width > 4, f.minY > quadro.minY + quadro.height * 0.25, f.maxY < quadro.maxY - 110 else { continue }
+            let dx = f.midX - centro.x
+            let dy = f.midY - centro.y
+            let d = dx * dx + dy * dy
+            if d < meglio {
+                meglio = d
+                scelta = una
+            }
+        }
+        return scelta
+    }
+
+    private func periodo() -> XCUIElement {
+        app.staticTexts["periodo"].firstMatch
+    }
+
+    private func controllaPeriodo(_ nome: String) {
+        let data = periodo()
+        XCTAssertTrue(data.waitForExistence(timeout: 10), "manca la data sotto il titolo (\(nome))")
+        var piena = false
+        for _ in 0..<10 where data.exists {
+            if !data.label.trimmingCharacters(in: .whitespaces).isEmpty {
+                piena = true
+                break
+            }
+            sleep(1)
+        }
+        XCTAssertTrue(piena, "data vuota (\(nome))")
+    }
+
+    private func senzaIntestazioni(_ nome: String) {
+        XCTAssertEqual(app.collectionViews.firstMatch.staticTexts.count, 0,
+                       "nella griglia ci sono ancora intestazioni (\(nome))")
+    }
+
+    private func pilloleVisibili() -> Bool {
+        let tasto = app.buttons["Raccolte"].firstMatch
+        return tasto.exists && tasto.isHittable
     }
 
     private func togliAvvisi() {
@@ -53,12 +98,16 @@ final class GrigliaProve: XCTestCase {
     func testPizzicoEApertura() {
         let griglia = apri()
         scatta("1-cinque-per-riga")
+        controllaPeriodo("cinque")
+        senzaIntestazioni("cinque")
         griglia.pinch(withScale: 0.45, velocity: -1.5)
         sleep(1)
         scatta("2-quindici-per-riga")
+        controllaPeriodo("quindici")
         griglia.pinch(withScale: 0.45, velocity: -1.5)
         sleep(1)
         scatta("3-trentuno-per-riga")
+        controllaPeriodo("trentuno")
         griglia.pinch(withScale: 6, velocity: 3)
         sleep(1)
         scatta("4-ingrandita")
@@ -68,7 +117,8 @@ final class GrigliaProve: XCTestCase {
         griglia.pinch(withScale: 0.3, velocity: -2)
         sleep(1)
         scatta("6-di-nuovo-piccola")
-        let cella = foto(griglia, 0)
+        senzaIntestazioni("di nuovo piccola")
+        let cella = fotoAlCentro(griglia)
         XCTAssertTrue(cella.waitForExistence(timeout: 10))
         cella.tap()
         sleep(2)
@@ -84,6 +134,7 @@ final class GrigliaProve: XCTestCase {
         _ = apri()
         let raccolte = app.buttons["Raccolte"].firstMatch
         XCTAssertTrue(raccolte.waitForExistence(timeout: 10))
+        XCTAssertTrue(raccolte.isHittable, "all'inizio le pillole devono essere visibili")
         raccolte.tap()
         sleep(2)
         scatta("9-raccolte")
@@ -93,26 +144,50 @@ final class GrigliaProve: XCTestCase {
 
     func testScegliEGiorno() {
         let griglia = apri()
+        controllaPeriodo("scegli")
         app.buttons["Scegli"].firstMatch.tap()
         sleep(1)
-        foto(griglia, 0).tap()
+        fotoAlCentro(griglia).tap()
         sleep(1)
         scatta("10-scelta")
+        XCTAssertTrue(app.staticTexts["1 scelta"].firstMatch.waitForExistence(timeout: 5))
         app.buttons["Annulla"].firstMatch.tap()
         sleep(1)
-        griglia.swipeUp()
+        griglia.swipeDown()
         sleep(1)
         scatta("11-scorsa")
+        senzaIntestazioni("scorsa")
+        controllaPeriodo("scorsa")
     }
 
     func testFotoApertaEUnaPerRiga() {
         if let k = app.launchArguments.firstIndex(of: "-visore.livello") { app.launchArguments[k + 1] = "0" }
         let griglia = apri()
         scatta("12-una-per-riga")
+        controllaPeriodo("una per riga")
+        let inizio = periodo().label
+        XCTAssertTrue(pilloleVisibili(), "all'inizio le pillole devono essere visibili")
+        griglia.swipeDown()
+        sleep(2)
+        scatta("12b-indietro-nel-tempo")
+        XCTAssertFalse(pilloleVisibili(), "scorrendo le pillole devono sparire")
+        XCTAssertTrue(app.staticTexts["Foto"].firstMatch.exists, "il titolo resta sopra")
+        controllaPeriodo("indietro nel tempo")
+        let a = XCTAttachment(string: "prima: \(inizio) · dopo: \(periodo().label)")
+        a.name = "date"
+        a.lifetime = .keepAlways
+        add(a)
+        for _ in 0..<4 {
+            griglia.swipeUp(velocity: .fast)
+            sleep(1)
+        }
+        sleep(1)
+        scatta("12c-di-nuovo-in-fondo")
+        XCTAssertTrue(pilloleVisibili(), "tornati all'inizio le pillole devono tornare")
         griglia.pinch(withScale: 0.5, velocity: -1)
         sleep(1)
         scatta("13-tre-per-riga")
-        let prima = foto(griglia, 0)
+        let prima = fotoAlCentro(griglia)
         descrivi("gerarchia-prima-del-tocco")
         prima.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
         sleep(3)

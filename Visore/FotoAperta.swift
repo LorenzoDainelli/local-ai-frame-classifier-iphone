@@ -49,6 +49,7 @@ struct FotoAperta: View {
     let inizio: Int
     @Binding var visto: Int64
     var raccolta: Int64? = nil
+    var rovescio = false
     @EnvironmentObject var cassetto: Cassetto
     @EnvironmentObject var annunci: Annunci
     @EnvironmentObject var interfaccia: Interfaccia
@@ -73,6 +74,7 @@ struct FotoAperta: View {
                                controlli: $controlli, ingrandita: $ingrandita, giu: $giu,
                                chiudi: { chiudi() }, mostraInfo: { info = s },
                                doppio: { doppioTocco(s) })
+                            .scaleEffect(x: rovescio ? -1 : 1, y: 1)
                             .containerRelativeFrame(.horizontal)
                             .id(s.id)
                             .onAppear { if s.id == elenco.scatti.last?.id { elenco.altri() } }
@@ -80,6 +82,7 @@ struct FotoAperta: View {
                 }
                 .scrollTargetLayout()
             }
+            .scaleEffect(x: rovescio ? -1 : 1, y: 1)
             .scrollTargetBehavior(.paging)
             .scrollPosition(id: $corrente)
             .scrollIndicators(.hidden)
@@ -90,20 +93,26 @@ struct FotoAperta: View {
                     HStack(alignment: .center, spacing: 10) {
                         Vetrino(simbolo: "chevron.left", etichetta: "Indietro") { chiudi() }
                         VStack(spacing: 1) {
-                            Text(Testi.giorno(s.giorno)).font(Carattere.piccolo).foregroundStyle(Tinta.ink)
+                            Text(Testi.giorno(s.giorno)).font(Carattere.piccolo).foregroundStyle(Tinta.carta)
                                 .lineLimit(1).minimumScaleFactor(0.8)
                             if let ora = Testi.ora(s.dataLocale) {
-                                Text(ora).font(.system(size: 12)).foregroundStyle(Tinta.tenue).monospacedDigit()
+                                Text(ora).font(.system(size: 12)).foregroundStyle(Tinta.carta.opacity(0.72))
+                                    .monospacedDigit()
                             }
                         }
-                        .frame(maxWidth: .infinity)
+                        .padding(.horizontal, 18)
+                        .frame(minHeight: 44)
+                        .vetro(Capsule(), ripiego: .ultraThinMaterial, bordo: false)
+                        .environment(\.colorScheme, .dark)
                         .contentTransition(.opacity)
+                        .animation(Moto.passo, value: s.id)
+                        .frame(maxWidth: .infinity)
                         Vetrino(simbolo: "info.circle", etichetta: "Informazioni") { info = s }
                     }
                     .padding(.horizontal, 14)
                     .padding(.top, 4)
                     Spacer(minLength: 0)
-                    Striscia(pacchetto: pacchetto, elenco: elenco, corrente: $corrente)
+                    Striscia(pacchetto: pacchetto, elenco: elenco, corrente: $corrente, rovescio: rovescio)
                         .frame(height: 46)
                         .padding(.bottom, 12)
                     BarraFoto(scatto: s, raccolta: raccolta)
@@ -182,6 +191,7 @@ struct Striscia: View {
     let pacchetto: Pacchetto
     @ObservedObject var elenco: Elenco
     @Binding var corrente: Int64?
+    var rovescio = false
 
     var body: some View {
         GeometryReader { g in
@@ -194,6 +204,7 @@ struct Striscia: View {
                                 .frame(width: qui ? 58 : 30, height: 46)
                                 .clipShape(RoundedRectangle(cornerRadius: qui ? 5 : 2, style: .continuous))
                                 .padding(.horizontal, qui ? 6 : 0)
+                                .scaleEffect(x: rovescio ? -1 : 1, y: 1)
                                 .contentShape(Rectangle())
                                 .id(s.id)
                                 .onTapGesture {
@@ -206,6 +217,7 @@ struct Striscia: View {
                     }
                     .padding(.horizontal, max(0, g.size.width / 2 - 35))
                 }
+                .scaleEffect(x: rovescio ? -1 : 1, y: 1)
                 .scrollIndicators(.hidden)
                 .animation(Moto.passo, value: corrente)
                 .onAppear { if let corrente { proxy.scrollTo(corrente, anchor: .center) } }

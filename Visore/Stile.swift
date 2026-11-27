@@ -310,6 +310,20 @@ struct FondoTesta: View {
     }
 }
 
+struct SfumaturaTesta: View {
+    var sotto: CGFloat = 28
+
+    var body: some View {
+        LinearGradient(stops: [.init(color: Tinta.fondo.opacity(0.94), location: 0),
+                               .init(color: Tinta.fondo.opacity(0.72), location: 0.45),
+                               .init(color: Tinta.fondo.opacity(0), location: 1)],
+                       startPoint: .top, endPoint: .bottom)
+            .padding(.bottom, -sotto)
+            .ignoresSafeArea(edges: .top)
+            .allowsHitTesting(false)
+    }
+}
+
 struct ConTestaCompatta<Azioni: View>: ViewModifier {
     let titolo: String
     let visibile: Bool
@@ -593,7 +607,7 @@ struct ConVetro<Forma: Shape>: ViewModifier {
     @ViewBuilder
     func body(content: Content) -> some View {
         if #available(iOS 26.0, *), scelto, !poca {
-            content.glassEffect(Glass.regular.tint(tinta).interactive(interattivo), in: forma)
+            content.glassEffect(Glass.clear.tint(tinta).interactive(interattivo), in: forma)
         } else {
             content
                 .background(ripiego, in: forma)

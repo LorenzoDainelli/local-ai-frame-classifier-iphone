@@ -101,6 +101,33 @@ enum Testi {
         return "\(mesiCorti[m - 1]) \(anno)"
     }
 
+    private static func pezzi(_ testo: String) -> (anno: Int, mese: Int?, giorno: Int?)? {
+        let parti = testo.prefix(10).split(separator: "-")
+        guard let primo = parti.first, let anno = Int(primo) else { return nil }
+        var mese: Int?
+        if parti.count > 1, let m = Int(parti[1]), (1...12).contains(m) { mese = m }
+        var giorno: Int?
+        if mese != nil, parti.count > 2, let g = Int(parti[2]), (1...31).contains(g) { giorno = g }
+        return (anno, mese, giorno)
+    }
+
+    static func arco(_ dal: String?, _ al: String?, _ per: Int) -> String {
+        guard let primo = dal ?? al, let ultimo = al ?? dal,
+              let a = pezzi(primo), let b = pezzi(ultimo) else { return "Senza data" }
+        guard per > 4, let m1 = a.mese, let m2 = b.mese else {
+            return a.anno == b.anno ? "\(a.anno)" : "\(a.anno)–\(b.anno)"
+        }
+        let n1 = mesiCorti[m1 - 1]
+        let n2 = mesiCorti[m2 - 1]
+        guard per > 7, let g1 = a.giorno, let g2 = b.giorno else {
+            if a.anno != b.anno { return "\(n1) \(a.anno) – \(n2) \(b.anno)" }
+            return m1 == m2 ? "\(n2) \(b.anno)" : "\(n1)–\(n2) \(b.anno)"
+        }
+        if a.anno != b.anno { return "\(g1) \(n1) \(a.anno) – \(g2) \(n2) \(b.anno)" }
+        if m1 != m2 { return "\(g1) \(n1) – \(g2) \(n2) \(b.anno)" }
+        return g1 == g2 ? "\(g2) \(n2) \(b.anno)" : "\(g1)–\(g2) \(n2) \(b.anno)"
+    }
+
     static func numero(_ n: Int) -> String {
         n.formatted(.number.locale(Locale(identifier: "it_IT")))
     }
@@ -260,6 +287,10 @@ struct GrigliaGiorni: View {
     @State private var anteprima: Scatto?
     @State private var compatta = false
     @State private var anno: String?
+    @State private var altoTesta: CGFloat = 0
+    @State private var dal: String?
+    @State private var al: String?
+    @State private var conPeriodo = false
 
     static let livelli = GrigliaController.livelli
     static let prefissi = GrigliaController.prefissi
@@ -287,31 +318,36 @@ struct GrigliaGiorni: View {
         ZStack {
             GrigliaNativa(pacchetto: pacchetto, scatti: elenco.scatti, finiti: elenco.finiti,
                           perGiorno: elenco.perGiorno, livello: i, proporzioni: proporzioni,
-                          cuori: cassetto.cuori, scelti: scelti, visto: visto, cima: AnyView(sopra(linea)),
-                          fondo: scelti == nil ? 100 : 160, timone: timone, azioni: azioniGriglia(linea))
+                          cuori: cassetto.cuori, scelti: scelti, visto: visto,
+                          cima: comeIPhone ? AnyView(vuotoIPhone) : AnyView(sopra(linea)),
+                          fondo: scelti == nil ? 100 : 160, timone: timone, azioni: azioniGriglia(linea),
+                          rovescio: comeIPhone, sottoTesta: comeIPhone ? altoTesta : 0)
                 .ignoresSafeArea(.container, edges: .vertical)
+        }
+        .overlay(alignment: .top) {
+            if comeIPhone { testaIPhone(linea, per) }
         }
         .overlay(alignment: .topLeading) {
             ZStack(alignment: .topLeading) {
-                if per < 10, compatta, let etichetta {
+                if !comeIPhone, per < 10, compatta, let etichetta {
                     EtichettaTempo(testo: Testi.tempo(etichetta, per), giu: giu)
                         .padding(.top, 54)
                         .padding(.leading, 12)
                         .transition(.opacity.combined(with: .scale(scale: 0.9, anchor: .topLeading)))
                 }
             }
-            .animation(Moto.passo, value: per < 10 && compatta && etichetta != nil)
+            .animation(Moto.passo, value: !comeIPhone && per < 10 && compatta && etichetta != nil)
             .allowsHitTesting(false)
         }
         .overlay(alignment: .trailing) {
-            BarraAnni(linea: linea) { vai($0, linea) }
-                .padding(.top, 120)
+            BarraAnni(linea: linea, rovescio: comeIPhone) { vai($0, linea) }
+                .padding(.top, comeIPhone ? altoTesta + 8 : 120)
         }
         .onChange(of: cima) { _, _ in
             timone.inCima()
             anno = nil
         }
-        .testaCompatta(titolo, visibile: compatta, indietro: torna) { azioni }
+        .testaCompatta(titolo, visibile: compatta && !comeIPhone, indietro: torna) { azioni }
         .background(Tinta.fondo.ignoresSafeArea())
         .senzaBarraDiSistema()
         .overlay {
@@ -351,6 +387,27 @@ struct GrigliaGiorni: View {
         .onDisappear { if scelti != nil { scelti = nil; interfaccia.scegliendo = false } }
     }
 
+    private var comeIPhone: Bool { Griglia.comeIPhone && radice }
+
+    @ViewBuilder
+    private var vuotoIPhone: some View {
+        if elenco.scatti.isEmpty {
+            Vuoto(titolo: "Nessuna foto", testo: vuota)
+        }
+    }
+
+    private func testaIPhone(_ linea: Linea, _ per: Int) -> some View {
+        TestaFoto(titolo: titolo, data: conPeriodo && !elenco.scatti.isEmpty ? Testi.arco(dal, al, per) : nil,
+                  conteggio: sottotitoloVero, nascosto: compatta) {
+            azioni
+        } sotto: {
+            pillole(linea)
+        }
+        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { nuovo in
+            if abs(nuovo - altoTesta) > 0.5 { altoTesta = nuovo }
+        }
+    }
+
     private func sopra(_ linea: Linea) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             Testa(titolo: titolo, sottotitolo: sottotitoloVero, indietro: torna) { azioni }
@@ -382,7 +439,7 @@ struct GrigliaGiorni: View {
                 guard elenco.scatti.indices.contains(i) else { return nil }
                 visto = elenco.scatti[i].id
                 return AnyView(FotoAperta(pacchetto: pacchetto, elenco: elenco, inizio: i, visto: $visto,
-                                          raccolta: raccolta)
+                                          raccolta: raccolta, rovescio: comeIPhone)
                     .environmentObject(cassetto)
                     .environmentObject(annunci)
                     .environmentObject(interfaccia)
@@ -395,6 +452,11 @@ struct GrigliaGiorni: View {
                                                 tutte: scelti == nil ? nil : tutteDelGiorno(gruppo, linea)))
                 }
                 return AnyView(IntestazioneBreve(testo: Testi.tempo(gruppo.giorno, gruppo.per), grande: gruppo.per == 4))
+            },
+            periodo: { a, b in
+                if dal != a { dal = a }
+                if al != b { al = b }
+                if !conPeriodo { conPeriodo = true }
             })
     }
 
@@ -549,6 +611,7 @@ struct IntestazioneBreve: View {
 
 struct BarraAnni: View {
     let linea: Linea
+    var rovescio = false
     let vai: (Int) -> Void
     @State private var dito: CGFloat?
     @State private var ultimo: Int?
@@ -560,14 +623,15 @@ struct BarraAnni: View {
             ZStack(alignment: .topTrailing) {
                 Color.clear.contentShape(Rectangle())
                 if let dito {
-                    ForEach(linea.anni, id: \.anno) { a in
+                    let anni = linea.anni
+                    ForEach(anni, id: \.anno) { a in
                         Text(a.anno)
                             .font(.system(size: 11, weight: .semibold)).monospacedDigit()
                             .foregroundStyle(Tinta.tenue)
                             .fixedSize()
-                            .offset(x: -30, y: min(alto - 14, a.frazione * alto))
+                            .offset(x: -30, y: min(alto - 14, posto(a, anni) * alto))
                     }
-                    if let i = linea.indice(a: dito / alto), linea.giorni.indices.contains(i) {
+                    if let i = linea.indice(a: frazione(dito / alto)), linea.giorni.indices.contains(i) {
                         Text(Testi.mese(linea.giorni[i]))
                             .font(Carattere.piccolo)
                             .foregroundStyle(Tinta.ink)
@@ -587,7 +651,7 @@ struct BarraAnni: View {
                 .onChanged { v in
                     guard linea.totale > 0 else { return }
                     dito = min(alto, max(0, v.location.y))
-                    if let i = linea.indice(a: v.location.y / alto), i != ultimo {
+                    if let i = linea.indice(a: frazione(v.location.y / alto)), i != ultimo {
                         ultimo = i
                         mese = String(linea.giorni[i].prefix(7))
                         vai(i)
@@ -602,6 +666,79 @@ struct BarraAnni: View {
         }
         .frame(width: 26)
         .animation(.easeOut(duration: 0.15), value: dito == nil)
+    }
+
+    private func frazione(_ f: CGFloat) -> CGFloat {
+        rovescio ? 1 - f : f
+    }
+
+    private func posto(_ a: Linea.Anno, _ anni: [Linea.Anno]) -> CGFloat {
+        guard rovescio, let i = anni.firstIndex(of: a) else { return a.frazione }
+        return 1 - (i + 1 < anni.count ? anni[i + 1].frazione : 1)
+    }
+}
+
+struct TestaFoto<Azioni: View, Sotto: View>: View {
+    let titolo: String
+    let data: String?
+    let conteggio: String?
+    let nascosto: Bool
+    @ViewBuilder var azioni: () -> Azioni
+    @ViewBuilder var sotto: () -> Sotto
+    @State private var altoCima: CGFloat = 0
+    @State private var altoTutto: CGFloat = 0
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .center, spacing: 8) {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(titolo)
+                        .font(Carattere.titolo)
+                        .foregroundStyle(Tinta.ink)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                    Text(data ?? " ")
+                        .font(Carattere.piccolo)
+                        .foregroundStyle(Tinta.attenuato)
+                        .monospacedDigit()
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                        .contentTransition(.numericText())
+                        .animation(Moto.passo, value: data)
+                        .accessibilityIdentifier("periodo")
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .allowsHitTesting(false)
+                azioni()
+                    .fixedSize()
+                    .layoutPriority(1)
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 6)
+            .padding(.bottom, 8)
+            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { altoCima = $0 }
+            VStack(alignment: .leading, spacing: 6) {
+                if let conteggio {
+                    Text(conteggio)
+                        .font(Carattere.minore)
+                        .foregroundStyle(Tinta.tenue)
+                        .lineLimit(1)
+                        .padding(.horizontal, 16)
+                        .allowsHitTesting(false)
+                }
+                sotto()
+            }
+            .opacity(nascosto ? 0 : 1)
+            .blur(radius: nascosto ? 6 : 0)
+            .offset(y: nascosto ? -10 : 0)
+            .allowsHitTesting(!nascosto)
+            .accessibilityHidden(nascosto)
+        }
+        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { altoTutto = $0 }
+        .background(alignment: .top) {
+            SfumaturaTesta(sotto: nascosto ? 28 - max(0, altoTutto - altoCima) : 28)
+        }
+        .animation(Moto.scena, value: nascosto)
     }
 }
 

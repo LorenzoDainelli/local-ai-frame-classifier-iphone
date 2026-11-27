@@ -6,8 +6,30 @@ on:
   workflow_dispatch:
 
 jobs:
+  spazio:
+    name: Quanti pezzi di prove
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: read
+      contents: read
+    outputs:
+      quanti: ${{ steps.conta.outputs.quanti }}
+      pezzi: ${{ steps.conta.outputs.pezzi }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: conta
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 strumenti/quanti_pezzi.py "$(python3 strumenti/le_mie_prove.py quante VisoreProve VisoreProve)"
+
   simulatore:
+    name: Prove sul simulatore, pezzo ${{ matrix.pezzo }} di ${{ needs.spazio.outputs.quanti }}
+    needs: spazio
     runs-on: macos-26
+    strategy:
+      fail-fast: false
+      matrix:
+        pezzo: ${{ fromJSON(needs.spazio.outputs.pezzi) }}
     steps:
       - uses: actions/checkout@v4
       - name: Xcode 26
@@ -28,8 +50,10 @@ jobs:
         run: |
           id=$(xcrun simctl list devices available -j | python3 -c "import json,sys; d=json.load(sys.stdin)['devices']; v=[x for k in sorted(d, reverse=True) if 'iOS' in k for x in d[k] if x['name'].startswith('iPhone') and 'Pro' in x['name'] and 'Max' not in x['name']]; print(v[0]['udid'])")
           echo "Simulatore $id"
+          scelte=$(python3 strumenti/le_mie_prove.py solo VisoreProve VisoreProve "${{ matrix.pezzo }}/${{ needs.spazio.outputs.quanti }}")
+          echo "$scelte"
           xcodebuild test -project Visore.xcodeproj -scheme Visore -configuration Release -destination "id=$id" \
-            -resultBundlePath prove.xcresult CODE_SIGNING_ALLOWED=NO 2>&1 | tee prove.log | grep -E "error|failed|passed|Test Case|XCTAssert|crash|Fatal" || true
+            $scelte -resultBundlePath prove.xcresult CODE_SIGNING_ALLOWED=NO 2>&1 | tee prove.log | grep -E "error|failed|passed|Test Case|XCTAssert|crash|Fatal" || true
           grep -q "TEST SUCCEEDED" prove.log
       - name: Schermate
         if: always()
@@ -55,5 +79,5 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: schermate
+          name: schermate-${{ matrix.pezzo }}
           path: schermate

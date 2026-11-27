@@ -246,6 +246,16 @@ final class FiltriTests: XCTestCase {
         XCTAssertEqual(try pescati(Mescola(nodi: [5])), [])
     }
 
+    func testAcasoUnNodoFiglioPrendeSoloIlSuoRamo() throws {
+        XCTAssertEqual(try archivio.nodi(figliDi: 2).map(\.id), [3])
+        XCTAssertEqual(try pescati(Mescola(nodi: [3])), [4])
+        XCTAssertEqual(try archivio.quanti(mescola: Mescola(nodi: [3])), 1)
+        XCTAssertEqual(try pescati(Mescola(nodi: [2])), [1, 4])
+        XCTAssertEqual(try pescati(Mescola(nodi: [3, 6])), [3, 4])
+        XCTAssertEqual(try pescati(Mescola(nodi: [1, 3])), try pescati(Mescola(nodi: [1])))
+        XCTAssertEqual(try pescati(Mescola(generi: ["video"], nodi: [3])), [])
+    }
+
     func testAcasoBastaUnaDellePersone() throws {
         XCTAssertEqual(try pescati(Mescola(persone: [1, 2])), [1, 2, 3, 4])
         XCTAssertEqual(try pescati(Mescola(persone: [4])), [7])

@@ -2,6 +2,10 @@ import SwiftUI
 import UIKit
 import VisoreKit
 
+enum Griglia {
+    static let comeIPhone = true
+}
+
 struct Pianta {
     struct Gruppo {
         let inizio: Int
@@ -15,6 +19,7 @@ struct Pianta {
     var alto: CGFloat = 0
     var lato: CGFloat = 1
     var prefisso = 10
+    var rovescio = false
 
     var tipo: String { Pianta.tipo(prefisso) }
 
@@ -66,6 +71,45 @@ struct Pianta {
         return p
     }
 
+    static func alRovescio(_ scatti: [Scatto], largo: CGFloat, colonne: Int, cima: CGFloat) -> Pianta {
+        var p = Pianta()
+        p.rovescio = true
+        let sp: CGFloat = colonne >= 15 ? 1 : 2
+        let lato = max(1, floor((largo - CGFloat(colonne - 1) * sp) / CGFloat(colonne)))
+        p.lato = lato
+        let passo = lato + sp
+        let margine = max(0, floor((largo - CGFloat(colonne) * lato - CGFloat(colonne - 1) * sp) / 2))
+        let n = scatti.count
+        guard n > 0 else {
+            p.alto = cima
+            return p
+        }
+        var celle = [CGRect](repeating: .zero, count: n)
+        if colonne == 1 {
+            let alte = scatti.map { floor(lato * Pianta.forma($0)) }
+            let totale = alte.reduce(0, +) + CGFloat(n - 1) * sp
+            var giu = cima + totale
+            for j in 0..<n {
+                giu -= alte[j]
+                celle[j] = CGRect(x: margine, y: giu, width: lato, height: alte[j])
+                giu -= sp
+            }
+            p.alto = cima + totale
+        } else {
+            let righe = (n + colonne - 1) / colonne
+            let totale = CGFloat(righe) * passo - sp
+            for j in 0..<n {
+                let riga = j / colonne
+                let posto = colonne - 1 - j % colonne
+                celle[j] = CGRect(x: margine + CGFloat(posto) * passo, y: cima + totale - lato - CGFloat(riga) * passo,
+                                  width: lato, height: lato)
+            }
+            p.alto = cima + totale
+        }
+        p.celle = celle
+        return p
+    }
+
     static func forma(_ s: Scatto) -> CGFloat {
         guard let w = s.larghezza, let h = s.altezza, w > 0, h > 0 else { return 1 }
         return min(1.8, max(0.3, CGFloat(h) / CGFloat(w)))
@@ -90,6 +134,7 @@ final class Disposizione: UICollectionViewLayout {
     var largo: CGFloat = 0
 
     var quante: Int { da.celle.count }
+    var rovescio: Bool { da.rovescio }
 
     func cella(_ i: Int) -> CGRect {
         let p = da.celle[i]
@@ -123,8 +168,30 @@ final class Disposizione: UICollectionViewLayout {
         return basso
     }
 
+    func cerca(_ vale: (CGRect) -> Bool) -> Int {
+        var basso = 0
+        var alto = quante
+        while basso < alto {
+            let mezzo = (basso + alto) / 2
+            if vale(cella(mezzo)) { alto = mezzo } else { basso = mezzo + 1 }
+        }
+        return basso
+    }
+
+    private func sottoAlRovescio(_ p: CGPoint) -> Int {
+        var i = min(cerca { $0.minY <= p.y }, quante - 1)
+        let riga = cella(i).maxY
+        if p.y > riga, i > 0, p.y - riga > cella(i - 1).minY - p.y { i -= 1 }
+        let su = cella(i).minY
+        var j = i
+        while j > 0, cella(j - 1).minY == su { j -= 1 }
+        while j + 1 < quante, cella(j + 1).minY == su, cella(j).minX > p.x { j += 1 }
+        return j
+    }
+
     func sotto(_ p: CGPoint) -> Int? {
         guard quante > 0 else { return nil }
+        if rovescio { return sottoAlRovescio(p) }
         var i = min(primo(p.y), quante - 1)
         let riga = cella(i).minY
         if p.y < riga, i > 0, riga - p.y > p.y - cella(i - 1).maxY { i -= 1 }
@@ -170,6 +237,20 @@ final class Disposizione: UICollectionViewLayout {
 
     override func layoutAttributesForElements(in rect: CGRect) -> [UICollectionViewLayoutAttributes]? {
         var uscita: [UICollectionViewLayoutAttributes] = []
+        if rovescio {
+            var j = cerca { $0.minY <= rect.maxY }
+            while j < quante {
+                let f = cella(j)
+                if f.maxY < rect.minY { break }
+                if f.intersects(rect) {
+                    let attr = UICollectionViewLayoutAttributes(forCellWith: IndexPath(item: j, section: 0))
+                    attr.frame = f
+                    uscita.append(attr)
+                }
+                j += 1
+            }
+            return uscita
+        }
         var i = primo(rect.minY)
         while i < quante {
             let f = cella(i)
@@ -486,6 +567,7 @@ struct AzioniGriglia {
     var apri: (Int) -> AnyView?
     var aperto: (Bool) -> Void
     var intestazione: (GruppoDelGiorno) -> AnyView
+    var periodo: (String?, String?) -> Void = { _, _ in }
 }
 
 struct GrigliaNativa: UIViewControllerRepresentable {
@@ -502,6 +584,8 @@ struct GrigliaNativa: UIViewControllerRepresentable {
     let fondo: CGFloat
     let timone: Timone
     let azioni: AzioniGriglia
+    var rovescio = false
+    var sottoTesta: CGFloat = 0
 
     func makeUIViewController(context: Context) -> GrigliaController {
         let c = GrigliaController(dati: self)
@@ -582,6 +666,10 @@ final class GrigliaController: UIViewController, UICollectionViewDataSource, UIC
     private var ditoY: CGFloat = 0
     private var pizzicando = false
     private var inSospeso = false
+    private var alFondo = true
+    private var periodoDal: String?
+    private var periodoAl: String?
+    private var periodoMandato = false
 
     static let livelli = [1, 3, 5, 15, 31]
     static let livelliLarghi = [3, 7, 9, 25, 51]
@@ -629,6 +717,7 @@ final class GrigliaController: UIViewController, UICollectionViewDataSource, UIC
         tieni.delegate = self
         vista.addGestureRecognizer(tieni)
         vista.contentInset.bottom = dati.fondo
+        if dati.rovescio { vista.contentInset.top = dati.sottoTesta }
         mettiCima()
         registerForTraitChanges([UITraitPreferredContentSizeCategory.self]) { (self: Self, _) in
             self.largo = 0
@@ -640,11 +729,21 @@ final class GrigliaController: UIViewController, UICollectionViewDataSource, UIC
         super.viewDidLayoutSubviews()
         let su = vista.adjustedContentInset.top
         if su != sopra {
-            if abs(vista.contentOffset.y + sopra) < 0.5 { vista.contentOffset.y = -su }
-            sopra = su
+            if dati.rovescio {
+                sopra = su
+                if alFondo { vaiInFondo() }
+            } else {
+                if abs(vista.contentOffset.y + sopra) < 0.5 { vista.contentOffset.y = -su }
+                sopra = su
+            }
         }
         let w = vista.bounds.width
-        guard w > 0, w != largo else { return }
+        guard w > 0, w != largo else {
+            if dati.rovescio, alFondo, w > 0, !pizzicando, !molla.attiva, !vista.isDragging, !vista.isDecelerating,
+               abs(vista.contentOffset.y - fondoY()) > 0.5 { vaiInFondo() }
+            return
+        }
+        let fondoPrima = dati.rovescio && ((largo == 0 && disposizione.quante == 0) || alFondo)
         let fermo = primoVisibile()
         largo = w
         disposizione.largo = w
@@ -654,7 +753,17 @@ final class GrigliaController: UIViewController, UICollectionViewDataSource, UIC
         if h > 0, h.isFinite { altezzaCima = ceil(h) }
         cima.view.frame = CGRect(x: 0, y: 0, width: w, height: altezzaCima)
         rifai()
-        if let fermo { riporta(fermo) } else { vista.contentOffset.y = -vista.adjustedContentInset.top }
+        if fondoPrima {
+            vaiInFondo()
+            vista.layoutIfNeeded()
+        } else if let fermo {
+            riporta(fermo)
+        } else if dati.rovescio {
+            vaiInFondo()
+        } else {
+            vista.contentOffset.y = -vista.adjustedContentInset.top
+        }
+        aggiornaPeriodo(forza: true)
     }
 
     private var largoSchermo: Bool { view.bounds.width > view.bounds.height * 1.2 }
@@ -667,6 +776,11 @@ final class GrigliaController: UIViewController, UICollectionViewDataSource, UIC
         if let p = piante[i] { return p }
         let prefisso = GrigliaController.prefissi[i]
         let tipo = Pianta.tipo(prefisso)
+        if dati.rovescio {
+            let p = Pianta.alRovescio(scatti, largo: largo, colonne: colonne(i), cima: altezzaCima)
+            piante[i] = p
+            return p
+        }
         let per = dati.perGiorno
         let p = Pianta.fai(scatti, largo: largo, colonne: colonne(i), prefisso: prefisso, cima: altezzaCima) {
             [altezze, scatti] chiave, inizio, fine in
@@ -716,6 +830,10 @@ final class GrigliaController: UIViewController, UICollectionViewDataSource, UIC
     private func primoVisibile() -> (Int, CGFloat)? {
         guard largo > 0, disposizione.quante > 0 else { return nil }
         let y = vista.contentOffset.y + vista.adjustedContentInset.top
+        if dati.rovescio {
+            let i = min(disposizione.cerca { $0.minY <= y }, disposizione.quante - 1)
+            return (i, disposizione.cella(i).minY - vista.contentOffset.y)
+        }
         guard y > altezzaCima else { return nil }
         let i = min(disposizione.primo(y), disposizione.quante - 1)
         return (i, disposizione.cella(i).minY - vista.contentOffset.y)
@@ -725,6 +843,16 @@ final class GrigliaController: UIViewController, UICollectionViewDataSource, UIC
         guard fermo.0 < disposizione.quante else { return }
         vista.contentOffset.y = limita(disposizione.cella(fermo.0).minY - fermo.1)
         vista.layoutIfNeeded()
+    }
+
+    private func fondoY() -> CGFloat {
+        max(-vista.adjustedContentInset.top,
+            disposizione.alto + vista.adjustedContentInset.bottom - vista.bounds.height)
+    }
+
+    private func vaiInFondo() {
+        vista.contentOffset.y = fondoY()
+        alFondo = true
     }
 
     private func limita(_ y: CGFloat) -> CGFloat {
@@ -760,7 +888,16 @@ final class GrigliaController: UIViewController, UICollectionViewDataSource, UIC
         dati = nuovi
         mettiCima()
         if vista == nil { return }
-        if vista.contentInset.bottom != nuovi.fondo { vista.contentInset.bottom = nuovi.fondo }
+        if vista.contentInset.bottom != nuovi.fondo {
+            vista.contentInset.bottom = nuovi.fondo
+            if nuovi.rovescio, alFondo, !pizzicando, !molla.attiva { vaiInFondo() }
+        }
+        if nuovi.rovescio, vista.contentInset.top != nuovi.sottoTesta {
+            vista.contentInset.top = nuovi.sottoTesta
+            sopra = vista.adjustedContentInset.top
+            if alFondo, !pizzicando, !molla.attiva { vaiInFondo() }
+            aggiornaPeriodo(forza: false)
+        }
         if nuovi.livello != livelloDaFuori {
             livelloDaFuori = nuovi.livello
             if nuovi.livello != livello, !pizzicando, !molla.attiva { salta(nuovi.livello) }
@@ -789,6 +926,10 @@ final class GrigliaController: UIViewController, UICollectionViewDataSource, UIC
         }
         let aggiunti = scatti.count > vecchi.count && !vecchi.isEmpty
             && scatti[vecchi.count - 1].id == vecchi[vecchi.count - 1].id && scatti[0].id == vecchi[0].id
+        if dati.rovescio {
+            mettiAlRovescio(aggiunti: aggiunti, vecchi: vecchi.count)
+            return
+        }
         let fermo = primoVisibile()
         rifai()
         if aggiunti {
@@ -804,13 +945,46 @@ final class GrigliaController: UIViewController, UICollectionViewDataSource, UIC
         if let meta { prova(meta) }
     }
 
+    private func mettiAlRovescio(aggiunti: Bool, vecchi: Int) {
+        let fondoPrima = alFondo
+        let primaY: CGFloat? = disposizione.quante > 0 ? disposizione.cella(0).minY : nil
+        rifai()
+        if !fondoPrima, let primaY, disposizione.quante > 0 {
+            vista.contentOffset.y += disposizione.cella(0).minY - primaY
+        }
+        if aggiunti {
+            let nuovi = (vecchi..<scatti.count).map { IndexPath(item: $0, section: 0) }
+            UIView.performWithoutAnimation {
+                vista.performBatchUpdates { vista.insertItems(at: nuovi) }
+            }
+        } else {
+            vista.reloadData()
+        }
+        if fondoPrima || primaY == nil {
+            vaiInFondo()
+        } else {
+            vista.contentOffset.y = limita(vista.contentOffset.y)
+        }
+        vista.layoutIfNeeded()
+        chiestoA = -1
+        if let meta { prova(meta) }
+        aggiornaPeriodo(forza: false)
+    }
+
     private func salta(_ nuovo: Int) {
+        let fondoPrima = dati.rovescio && alFondo
         let fermo = primoVisibile()
         livello = nuovo
         rifai()
-        if let fermo { riporta(fermo) }
+        if fondoPrima {
+            vaiInFondo()
+            vista.layoutIfNeeded()
+        } else if let fermo {
+            riporta(fermo)
+        }
         rivedi(animato: false)
         aggiornaEtichetta(forza: true)
+        aggiornaPeriodo(forza: true)
     }
 
     private func px(_ i: Int) -> CGFloat {
@@ -888,7 +1062,8 @@ final class GrigliaController: UIViewController, UICollectionViewDataSource, UIC
 
     func collectionView(_ collectionView: UICollectionView, willDisplay cell: UICollectionViewCell,
                         forItemAt indexPath: IndexPath) {
-        guard !dati.finiti, indexPath.item >= scatti.count - 150, chiestoA != scatti.count else { return }
+        let soglia = dati.rovescio ? max(150, colonne(livello) * 24) : 150
+        guard !dati.finiti, indexPath.item >= scatti.count - soglia, chiestoA != scatti.count else { return }
         chiestoA = scatti.count
         let altri = dati.azioni.altri
         DispatchQueue.main.async { altri() }
@@ -904,11 +1079,17 @@ final class GrigliaController: UIViewController, UICollectionViewDataSource, UIC
         let y = scrollView.contentOffset.y + scrollView.adjustedContentInset.top
         if !pizzicando, !molla.attiva { aggiornaCompatta() }
         if !pizzicando, !molla.attiva { aggiornaEtichetta(forza: false) }
+        if !pizzicando, !molla.attiva { aggiornaPeriodo(forza: false) }
     }
 
     private func aggiornaCompatta() {
         let y = vista.contentOffset.y + vista.adjustedContentInset.top
-        let nuova = y > 56
+        var nuova = y > 56
+        if dati.rovescio, largo > 0 {
+            let distanza = fondoY() - vista.contentOffset.y
+            alFondo = distanza < 1
+            nuova = distanza > max(44, min(disposizione.lato, 160))
+        }
         if nuova != compatta {
             compatta = nuova
             let azione = dati.azioni.compatta
@@ -942,6 +1123,27 @@ final class GrigliaController: UIViewController, UICollectionViewDataSource, UIC
         DispatchQueue.main.async { azione(chiave, giu) }
     }
 
+    private func aggiornaPeriodo(forza: Bool) {
+        guard dati.rovescio, largo > 0 else { return }
+        let n = min(disposizione.quante, scatti.count)
+        var dal: String?
+        var al: String?
+        if n > 0 {
+            let su = vista.contentOffset.y + vista.adjustedContentInset.top
+            let giu = vista.contentOffset.y + vista.bounds.height - vista.adjustedContentInset.bottom
+            let nuovo = min(disposizione.cerca { $0.minY < giu }, n - 1)
+            let vecchio = max(nuovo, min(disposizione.cerca { $0.maxY <= su } - 1, n - 1))
+            dal = scatti[vecchio].giorno
+            al = scatti[nuovo].giorno
+        }
+        guard forza || !periodoMandato || dal != periodoDal || al != periodoAl else { return }
+        periodoMandato = true
+        periodoDal = dal
+        periodoAl = al
+        let azione = dati.azioni.periodo
+        DispatchQueue.main.async { azione(dal, al) }
+    }
+
     func vai(_ giorno: String) {
         meta = giorno
         prova(giorno)
@@ -949,6 +1151,17 @@ final class GrigliaController: UIViewController, UICollectionViewDataSource, UIC
 
     private func prova(_ giorno: String) {
         guard largo > 0 else { return }
+        if dati.rovescio {
+            let n = min(disposizione.quante, scatti.count)
+            guard let i = scatti.prefix(n).firstIndex(where: { $0.giorno?.hasPrefix(giorno) ?? false }) else { return }
+            meta = nil
+            molla.ferma()
+            let f = disposizione.cella(i)
+            vista.setContentOffset(CGPoint(x: vista.contentOffset.x,
+                                           y: limita(f.maxY + vista.adjustedContentInset.bottom - vista.bounds.height)),
+                                   animated: false)
+            return
+        }
         let p = disposizione.da
         let chiave = String(giorno.prefix(p.prefisso))
         guard let g = p.gruppi.firstIndex(where: { $0.chiave == chiave }) else { return }
@@ -961,6 +1174,11 @@ final class GrigliaController: UIViewController, UICollectionViewDataSource, UIC
     }
 
     func inCima() {
+        if dati.rovescio {
+            molla.ferma()
+            vista.setContentOffset(CGPoint(x: vista.contentOffset.x, y: fondoY()), animated: true)
+            return
+        }
         vista.setContentOffset(CGPoint(x: vista.contentOffset.x, y: -vista.adjustedContentInset.top), animated: true)
     }
 
@@ -1149,6 +1367,7 @@ final class GrigliaController: UIViewController, UICollectionViewDataSource, UIC
         if lato(livello) > lato(prima) { alzaVisibili() }
         aggiornaCompatta()
         aggiornaEtichetta(forza: true)
+        aggiornaPeriodo(forza: true)
         preparaVicine()
         if inSospeso {
             inSospeso = false

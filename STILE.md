@@ -26,7 +26,8 @@ Si usano sempre questi. Non si scrivono colori, caratteri o tempi a mano nelle s
 - **Vetro liquido** (`.vetro`, `GruppoDiVetro`, `Vetro`): acceso di base, come su iPhone, si
   spegne in Impostazioni › Aspetto con l'interruttore. Si usa solo per i comandi che
   galleggiano: tasti tondi, vetrini sopra le foto, barra in basso, barra della scelta,
-  annunci, pillole sopra le foto, testa compatta (sfumata). Mai sul contenuto (righe, carte,
+  annunci, pillole sopra le foto, testa compatta (sfumata). È il vetro chiaro di iOS, il più
+  trasparente. Nella foto aperta anche data e ora stanno in una pillola di vetro. Mai sul contenuto (righe, carte,
   pillole dei filtri). Spento, o con «Riduci trasparenza», o prima di iOS 26: tornano i pezzi
   pieni di prima. Il tasto A caso diventa vetro arancio.
 - **Pezzi**:
@@ -62,27 +63,38 @@ Si usano sempre questi. Non si scrivono colori, caratteri o tempi a mano nelle s
   pieno di 44 pt con le due frecce che si incrociano, 2 pt più staccato degli altri. È
   l'unico tasto colorato della testata. Il primo giorno ha un anello che pulsa piano.
 - **A caso** (bozza A scelta): il tasto apre un foglio con il tipo di scatto (Foto, Live,
-  Video: si accendono anche insieme, almeno uno resta acceso), i nodi, le persone, gli anni,
+  Video: si accendono anche insieme, almeno uno resta acceso), i nodi (la freccia a sinistra
+  apre i sotto-nodi, rientrati, e ognuno si sceglie da solo), le persone, gli anni,
   tre interruttori (prima i preferiti, audio dei video, ricomincia alla fine) e il ritmo
   (3, 5 o 8 secondi). In fondo il numero di scatti corre verso quello nuovo e il tasto
   «Mescola e guarda» parte. La mostra è nera, a tutto schermo, come le storie: barre in
   alto a gruppi di dieci, tocco a destra avanti, a sinistra indietro, al centro nasconde i
   comandi, tenere premuto ferma, due tocchi mettono il cuore, giù chiude. Le foto si muovono
   piano, i video e le Live partono da soli, l'audio sale piano.
-- **Foto**: il titolo serif con il conteggio. Sotto ci sono le pillole «Raccolte», «Tutte» e
-  gli anni. Si pizzica come in Foto di iPhone: 1, 3, 5, 15 o 31 foto per riga. A 1, 3 e 5 i
-  giorni hanno l'intestazione serif con i luoghi; a 15 si raggruppa per mese («Nov 2026»),
-  a 31 per anno («2026»). Mentre pizzichi non si ingrandisce mai la pagina: ogni foto si
-  sposta e cambia misura un poco alla volta fra il suo posto di prima e quello del livello
-  nuovo, seguendo le dita, e le intestazioni sfumano l'una nell'altra. La griglia non scorre e
-  non trema; la foto sotto le dita resta sotto le dita, al passo di livello c'è una piccola
-  vibrazione e, lasciate le dita, una molla finisce o annulla il passo. Ai bordi (1 e 31)
-  l'elastico è duro. A 15 e 31, scorrendo, in alto a sinistra c'è la pillola di vetro col
-  mese o l'anno, che cambia a ghigliottina (il nuovo spinge via il vecchio). Le miniature
-  diventano più nitide quando si ingrandiscono; a 1 per riga si vede la foto vera. In
-  orizzontale le colonne aumentano (3, 7, 9, 25, 51). Le miniature compaiono
-  sfumando, e tenendo premuto se ne vede l'anteprima. A destra c'è la barra per correre
-  fra gli anni.
+- **Foto**, come l'app Foto di iPhone: lo scatto più nuovo è in basso a destra, quello prima
+  alla sua sinistra, e così via; i più vecchi stanno sopra. La griglia si apre dal fondo, con
+  gli ultimi scatti in vista, e salendo si torna indietro nel tempo. Non ci sono più
+  intestazioni di giorni, mesi o anni: le foto stanno tutte attaccate, in una griglia sola.
+  In cima restano fermi il titolo serif «Foto», sotto la data di quello che si vede e a destra
+  i tasti (lente, ingranaggio, A caso); le foto scorrono sotto. Niente barra sfocata: solo una
+  sfumatura leggera del colore del fondo (chiara o scura col tema) che sparisce verso il
+  basso, perché le scritte si leggano. La data segue lo schermo e cambia con le cifre che
+  scivolano: un giorno «12 Nov 2026», lo stesso mese «8–12 Nov 2026», due mesi
+  «28 Ott – 3 Nov 2026», due anni «28 Dic 2025 – 3 Gen 2026»; a 15 per riga i mesi
+  («Ott–Nov 2026»), a 31 gli anni («2025–2026»). Sotto la data ci sono il conteggio e le
+  pillole «Raccolte», «Tutte» e gli anni: appena si sale di circa una riga spariscono sfumando,
+  e tornano quando si è di nuovo in fondo. Si pizzica come in Foto di iPhone: 1, 3, 5 (di base),
+  15 o 31 foto per riga. Mentre pizzichi non si ingrandisce mai la pagina: ogni foto si sposta
+  e cambia misura un poco alla volta fra il suo posto di prima e quello del livello nuovo,
+  seguendo le dita. La griglia non scorre e non trema; la foto sotto le dita resta sotto le
+  dita, al passo di livello c'è una piccola vibrazione e, lasciate le dita, una molla finisce
+  o annulla il passo. Ai bordi (1 e 31) l'elastico è duro. Le miniature diventano più nitide
+  quando si ingrandiscono; a 1 per riga si vede la foto vera. In orizzontale le colonne
+  aumentano (3, 7, 9, 25, 51). Le miniature compaiono sfumando, e tenendo premuto se ne vede
+  l'anteprima. A destra c'è la barra per correre fra gli anni: in alto i più vecchi, in basso
+  i più nuovi. Il modo di prima (dal più nuovo in alto, con le intestazioni dei giorni) resta
+  nel codice: si riaccende con `Griglia.comeIPhone = false` in `Visore/GrigliaNativa.swift`.
+  Le altre griglie (nodi, persone, raccolte, ricerca) restano come prima.
 - **Foto aperta**, come l'app Foto di iPhone:
   - in alto: il vetrino Indietro, la data e l'ora in serif, il vetrino Informazioni;
   - in basso: la **striscia delle miniature** di prima e dopo, con quella attuale più larga,

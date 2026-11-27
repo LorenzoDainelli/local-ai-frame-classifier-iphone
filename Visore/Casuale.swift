@@ -338,6 +338,8 @@ struct SceltaCasuale: View {
     @State private var quanti: Int
     @State private var perTipo: [String: Int] = [:]
     @State private var nodi: [Nodo] = []
+    @State private var figli: [Int64: [Nodo]] = [:]
+    @State private var aperti: Set<Int64> = []
     @State private var persone: [Persona] = []
     @State private var anni: [Anno] = []
     @State private var tremaTipo: [String: Int] = [:]
@@ -403,6 +405,7 @@ struct SceltaCasuale: View {
         .task {
             let a = pacchetto.archivio
             nodi = (try? a.nodi(figliDi: nil)) ?? []
+            apriIScelti()
             persone = Array(((try? a.persone()) ?? []).prefix(40))
             anni = (try? a.anni()) ?? []
             conta()
@@ -420,41 +423,129 @@ struct SceltaCasuale: View {
         VStack(alignment: .leading, spacing: 0) {
             titoletto("Nodi", ricetta.mescola.nodi.isEmpty ? ("Tutti", { tuttiINodi() }) : ("Togli tutti", { cambia { $0.nodi = [] } }))
             VStack(spacing: 0) {
-                ForEach(Array(nodi.enumerated()), id: \.element.id) { i, n in
-                    if i > 0 { Divider().overlay(Tinta.linea).padding(.leading, 68) }
-                    rigaNodo(n).entra(apparso, i + 3, piano)
+                let frecce = conFrecce
+                ForEach(Array(voci.enumerated()), id: \.element.id) { i, v in
+                    VStack(spacing: 0) {
+                        if i > 0 { Divider().overlay(Tinta.linea).padding(.leading, attacco(v.livello, frecce) + 54) }
+                        rigaNodo(v, frecce)
+                    }
+                    .entra(apparso, i + 3, piano)
+                    .transition(.opacity.combined(with: .offset(y: -6)))
                 }
             }
             .cartaFoglio()
         }
     }
 
-    private func rigaNodo(_ n: Nodo) -> some View {
-        let on = ricetta.mescola.nodi.contains(n.id)
-        return Button {
-            cambia { m in if on { m.nodi.remove(n.id) } else { m.nodi.insert(n.id) } }
-        } label: {
-            HStack(spacing: 12) {
-                Copertina(pacchetto: pacchetto, nodo: n, lato: 42)
-                    .rotationEffect(.degrees(on ? -4 : 0))
-                    .scaleEffect(on ? 1.05 : 1)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(n.nome).font(.system(size: 15.5, weight: .medium)).foregroundStyle(Tinta.ink).lineLimit(1)
-                    Text(Tipi.scatti(n.quantiColRamo)).font(Carattere.minore).foregroundStyle(Tinta.tenue)
+    private var conFrecce: Bool {
+        nodi.contains { !(figli[$0.id] ?? []).isEmpty }
+    }
+
+    private var voci: [VoceNodo] {
+        var uscita: [VoceNodo] = []
+        let scelti = ricetta.mescola.nodi
+        func aggiungi(_ elenco: [Nodo], _ livello: Int, _ dentro: Bool) {
+            for n in elenco {
+                uscita.append(VoceNodo(nodo: n, livello: livello, dentro: dentro))
+                if aperti.contains(n.id), let sotto = figli[n.id], !sotto.isEmpty {
+                    aggiungi(sotto, livello + 1, dentro || scelti.contains(n.id))
                 }
-                Spacer(minLength: 8)
-                Spunta(acceso: on, lato: 24)
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 9)
-            .contentShape(Rectangle())
-            .animation(Moto.molla, value: on)
         }
-        .buttonStyle(Premuto(quanto: 0.98))
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(n.nome)
-        .accessibilityValue(Tipi.scatti(n.quantiColRamo))
-        .accessibilityAddTraits(on ? [.isButton, .isSelected] : .isButton)
+        aggiungi(nodi, 0, false)
+        return uscita
+    }
+
+    private func attacco(_ livello: Int, _ frecce: Bool) -> CGFloat {
+        (frecce ? 32 : 14) + CGFloat(livello) * 22
+    }
+
+    private func rigaNodo(_ v: VoceNodo, _ frecce: Bool) -> some View {
+        let n = v.nodo
+        let on = ricetta.mescola.nodi.contains(n.id)
+        let aperto = aperti.contains(n.id)
+        let sotto = figli[n.id] ?? []
+        return HStack(spacing: 0) {
+            if frecce {
+                if sotto.isEmpty {
+                    Color.clear.frame(width: 28, height: 42)
+                } else {
+                    Button { apri(n) } label: {
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(aperto ? Tinta.accento : Tinta.tenue)
+                            .rotationEffect(.degrees(aperto ? 90 : 0))
+                            .frame(width: 28, height: 42)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(Premuto(quanto: 0.9))
+                    .accessibilityLabel(aperto ? "Chiudi \(n.nome)" : "Apri \(n.nome)")
+                }
+            }
+            Button {
+                cambia { m in if on { m.nodi.remove(n.id) } else { m.nodi.insert(n.id) } }
+            } label: {
+                HStack(spacing: 12) {
+                    Copertina(pacchetto: pacchetto, nodo: n, lato: 42)
+                        .rotationEffect(.degrees(on ? -4 : 0))
+                        .scaleEffect(on ? 1.05 : 1)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(n.nome).font(.system(size: 15.5, weight: .medium)).foregroundStyle(Tinta.ink).lineLimit(1)
+                        Text(Tipi.scatti(n.quantiColRamo)).font(Carattere.minore).foregroundStyle(Tinta.tenue)
+                    }
+                    Spacer(minLength: 8)
+                    Spunta(acceso: on || v.dentro, lato: 24)
+                        .opacity(v.dentro && !on ? 0.45 : 1)
+                }
+                .padding(.trailing, 14)
+                .padding(.vertical, 9)
+                .contentShape(Rectangle())
+                .animation(Moto.molla, value: on)
+            }
+            .buttonStyle(Premuto(quanto: 0.98))
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(n.nome)
+            .accessibilityValue(v.dentro && !on ? "\(Tipi.scatti(n.quantiColRamo)), già compreso" : Tipi.scatti(n.quantiColRamo))
+            .accessibilityAddTraits(on ? [.isButton, .isSelected] : .isButton)
+        }
+        .padding(.leading, attacco(v.livello, frecce) - (frecce ? 28 : 0))
+    }
+
+    private func guarda(_ elenco: [Nodo]) {
+        let a = pacchetto.archivio
+        for n in elenco where figli[n.id] == nil {
+            figli[n.id] = (try? a.nodi(figliDi: n.id)) ?? []
+        }
+    }
+
+    private func apri(_ n: Nodo) {
+        let aperto = aperti.contains(n.id)
+        if !aperto { guarda(figli[n.id] ?? []) }
+        withAnimation(piano ? .linear(duration: 0.01) : Moto.passo) {
+            if aperto { aperti.remove(n.id) } else { aperti.insert(n.id) }
+        }
+    }
+
+    private func apriIScelti() {
+        let a = pacchetto.archivio
+        for id in ricetta.mescola.nodi {
+            var su = (try? a.nodo(id))?.genitoreId
+            var passi = 0
+            while let g = su, passi < 64 {
+                aperti.insert(g)
+                su = (try? a.nodo(g))?.genitoreId
+                passi += 1
+            }
+        }
+        guarda(nodi)
+        var coda = nodi
+        while !coda.isEmpty {
+            let n = coda.removeFirst()
+            guard aperti.contains(n.id) else { continue }
+            let sotto = figli[n.id] ?? []
+            guarda(sotto)
+            coda.append(contentsOf: sotto)
+        }
     }
 
     private var sezionePersone: some View {
@@ -603,6 +694,13 @@ struct SceltaCasuale: View {
             chiudi()
         }
     }
+}
+
+struct VoceNodo: Identifiable {
+    let nodo: Nodo
+    let livello: Int
+    let dentro: Bool
+    var id: Int64 { nodo.id }
 }
 
 extension View {
