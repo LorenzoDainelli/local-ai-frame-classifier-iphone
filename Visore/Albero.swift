@@ -19,7 +19,10 @@ struct Copertina: View {
         .frame(width: lato, height: lato)
         .clipShape(RoundedRectangle(cornerRadius: lato > 60 ? 10 : 8, style: .continuous))
         .task(id: nodo.id) {
-            guard let s = try? pacchetto.archivio.copertina(nodo: nodo.id) else { return }
+            guard let s = try? pacchetto.archivio.copertina(nodo: nodo.id) else {
+                immagine = nil
+                return
+            }
             let posto = s.mini ?? s.posto
             immagine = Miniature.tutte.pronta(posto)
             if immagine == nil { immagine = await Miniature.tutte.carica(pacchetto, posto, lato: lato * scala) }

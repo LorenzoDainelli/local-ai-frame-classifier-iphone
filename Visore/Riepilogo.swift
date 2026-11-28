@@ -72,12 +72,16 @@ struct Miniatura: View {
             }
             .clipped()
             .task(id: scatto?.id) {
-                guard let scatto else { return }
+                guard let scatto else {
+                    immagine = nil
+                    return
+                }
                 let posto = scatto.mini ?? scatto.posto
                 if let pronta = Miniature.tutte.pronta(posto) {
                     immagine = pronta
                     return
                 }
+                immagine = nil
                 let caricata = await Miniature.tutte.carica(pacchetto, posto, lato: lato * scala)
                 withAnimation(Moto.passo) { immagine = caricata }
             }

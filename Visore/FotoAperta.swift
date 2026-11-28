@@ -61,6 +61,7 @@ struct FotoAperta: View {
     @State private var ingrandita = false
     @State private var giu: CGFloat = 0
     @State private var caricate = 0
+    @State private var posata = false
 
     init(pacchetto: Pacchetto, elenco: Elenco, inizio: Int, visto: Binding<Int64>,
          raccolta: Int64? = nil, rovescio: Bool = false) {
@@ -99,7 +100,23 @@ struct FotoAperta: View {
             .scrollPosition(id: $corrente)
             .scrollIndicators(.hidden)
             .scrollDisabled(ingrandita)
+            .onScrollGeometryChange(for: CGFloat.self) { g in
+                g.contentOffset.x / max(1, g.containerSize.width)
+            } action: { _, pagina in
+                guard !posata, let corrente, let i = elenco.scatti.firstIndex(where: { $0.id == corrente }) else { return }
+                if abs(pagina - CGFloat(i)) < 0.01 { posata = true }
+            }
+            .opacity(posata ? 1 : 0)
             .ignoresSafeArea()
+            if !posata, let s = elenco.scatti.first(where: { $0.id == corrente }),
+               let immagine = (s.video ? nil : Originali.tutti.pronto(s.posto)) ?? Miniature.tutte.pronta(s.mini ?? s.posto) {
+                Image(uiImage: immagine)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .ignoresSafeArea()
+                    .allowsHitTesting(false)
+            }
             if controlli, giu == 0, let s = elenco.scatti.first(where: { $0.id == corrente }) {
                 VStack(spacing: 0) {
                     HStack(alignment: .center, spacing: 10) {
@@ -146,6 +163,10 @@ struct FotoAperta: View {
         .animation(Moto.passo, value: controlli)
         .onAppear {
             if corrente == nil, elenco.scatti.indices.contains(inizio) { corrente = elenco.scatti[inizio].id }
+        }
+        .task {
+            try? await Task.sleep(for: .milliseconds(400))
+            posata = true
         }
         .task(id: corrente) { await caricaIntorno(corrente) }
         .onChange(of: corrente) { _, nuovo in

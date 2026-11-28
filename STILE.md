@@ -120,6 +120,9 @@ Si usano sempre questi. Non si scrivono colori, caratteri o tempi a mano nelle s
     (arrotondato in su, senza meno). Il dito sposta in modo relativo, l'immagine segue il dito.
     Il video compare con una dissolvenza solo quando il primo fotogramma è pronto: prima si
     vede la miniatura, mai fotogrammi a metà.
+    All'apertura si vede subito la foto toccata, ferma, finché la fila delle pagine non è
+    davvero su di lei: mai un lampo di un'altra foto. Le miniature, appena cambiano scatto,
+    si svuotano prima di caricare quella nuova.
 - **Informazioni**: un foglio a metà schermo. In cima giorno, ora e luogo, poi le carte e le
   pillole di persone e nodi, che vanno a capo.
 - **Nodi** (bozza A scelta il 22 novembre 2026, con le righe della bozza B): righe a carta,

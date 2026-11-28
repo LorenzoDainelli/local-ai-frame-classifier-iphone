@@ -22,7 +22,10 @@ struct Volto: View {
         .frame(width: lato, height: lato)
         .clipShape(Circle())
         .task(id: persona.id) {
-            guard let posto = persona.volto else { return }
+            guard let posto = persona.volto else {
+                immagine = nil
+                return
+            }
             immagine = Miniature.tutte.pronta(posto)
             if immagine == nil { immagine = await Miniature.tutte.carica(pacchetto, posto, lato: lato * scala) }
         }
