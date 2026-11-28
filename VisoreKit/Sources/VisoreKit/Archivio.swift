@@ -292,6 +292,15 @@ public final class Archivio {
         return try righe(sql, genitore.map { [$0] } ?? [], Archivio.nodo)
     }
 
+    public func nodi(con ids: [Int64]) throws -> [Nodo] {
+        guard !ids.isEmpty else { return [] }
+        let posti = Array(repeating: "?", count: ids.count).joined(separator: ",")
+        let trovati = try righe("SELECT \(campiNodo) FROM nodi WHERE id IN (\(posti)) AND quanti_col_ramo > 0",
+                                ids, Archivio.nodo)
+        let perId = Dictionary(trovati.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        return ids.compactMap { perId[$0] }
+    }
+
     public func nodo(_ id: Int64) throws -> Nodo? {
         try righe("SELECT \(campiNodo) FROM nodi WHERE id = ?", [id], Archivio.nodo).first
     }

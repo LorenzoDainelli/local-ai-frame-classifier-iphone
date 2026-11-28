@@ -151,6 +151,37 @@ final class GrigliaProve: XCTestCase {
         XCTAssertFalse(app.buttons["Indietro"].firstMatch.exists, "dopo indietro si è ancora dentro il nodo")
     }
 
+    func testCuoreSulNodo() {
+        _ = apri()
+        app.buttons["Nodi"].firstMatch.tap()
+        sleep(1)
+        let nodo = app.buttons.matching(identifier: "nodo").firstMatch
+        XCTAssertTrue(nodo.waitForExistence(timeout: 10))
+        nodo.tap()
+        sleep(2)
+        let cuore = app.buttons.matching(identifier: "cuore-nodo").firstMatch
+        XCTAssertTrue(cuore.waitForExistence(timeout: 10), "dentro un nodo manca il cuore in alto a destra")
+        if cuore.label == "Togli dai nodi col cuore" { cuore.tap(); sleep(1) }
+        cuore.tap()
+        sleep(1)
+        XCTAssertEqual(cuore.label, "Togli dai nodi col cuore", "il cuore non si accende")
+        scatta("12-cuore-acceso")
+        app.buttons["Indietro"].firstMatch.tap()
+        sleep(2)
+        XCTAssertTrue(app.staticTexts["COL CUORE"].waitForExistence(timeout: 5),
+                      "il nodo col cuore non compare in cima ai Nodi")
+        scatta("13-nodi-col-cuore")
+        app.buttons.matching(identifier: "nodo").firstMatch.tap()
+        sleep(2)
+        let ancora = app.buttons.matching(identifier: "cuore-nodo").firstMatch
+        XCTAssertTrue(ancora.waitForExistence(timeout: 10))
+        ancora.tap()
+        sleep(1)
+        app.buttons["Indietro"].firstMatch.tap()
+        sleep(2)
+        XCTAssertFalse(app.staticTexts["COL CUORE"].exists, "tolto il cuore, il nodo resta in cima")
+    }
+
     func testRaccolteDallaPillola() {
         _ = apri()
         let raccolte = app.buttons["Raccolte"].firstMatch

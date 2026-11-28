@@ -72,4 +72,21 @@ final class PacchettoDiProvaTests: XCTestCase {
             XCTAssertEqual($0 as? ErroreVisore, .passwordSbagliata)
         }
     }
+
+    func testINodiColCuoreSiTrovanoAncheSeSonoInFondo() throws {
+        let p = try Pacchetto(cartella: cartella, password: "tre parole che ricordi")
+        var tutti: [Nodo] = []
+        var daGuardare: [Int64?] = [nil]
+        while let genitore = daGuardare.popLast() {
+            for n in try p.archivio.nodi(figliDi: genitore) {
+                tutti.append(n)
+                daGuardare.append(n.id)
+            }
+        }
+        XCTAssertFalse(tutti.isEmpty)
+        let scelti = Array(tutti.reversed().prefix(2)).map(\.id)
+        let trovati = try p.archivio.nodi(con: scelti + [999_999_999])
+        XCTAssertEqual(trovati.map(\.id), scelti)
+        XCTAssertEqual(try p.archivio.nodi(con: []), [])
+    }
 }

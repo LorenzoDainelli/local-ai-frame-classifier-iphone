@@ -126,6 +126,10 @@ Si usano sempre questi. Non si scrivono colori, caratteri o tempi a mano nelle s
   a barre che crescono, «Dove» a pillole e le persone in fila. Toccare un anno o un luogo
   lascia nella griglia solo quelle foto e compare la pillola con la × per toglierlo.
   «Solo qui», l'ordine delle sottocategorie e quello delle foto stanno nel menu «…».
+  In alto a destra, prima del «…», il **cuore** in un tondo di vetro: acceso è arancio.
+  I nodi col cuore compaiono in cima alla pagina Nodi sotto «Col cuore», nell'ordine in cui
+  sono stati messi, poi «Tutti». Il cuore dei nodi resta sull'iPhone, uno per archivio.
+  Il tasto «Indietro» toglie un passo dalla strada della sua sezione.
 - **Persone**: in cima «Le più presenti», quattro volti con l'anello arancio che si riempie
   secondo quante foto hanno. Poi tutte dalla A alla Z, divise per lettera, con l'indice delle
   lettere a destra da toccare o strisciare. Al tocco il volto prende l'anello arancio.
