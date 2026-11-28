@@ -97,7 +97,6 @@ final class Movimento: ObservableObject {
 
     let lettore = AVQueuePlayer()
     private var fonte: VideoCifrato?
-    private var anello: AVPlayerLooper?
     private var fineGiro: NSObjectProtocol?
     private var orologio: Any?
 
@@ -136,34 +135,45 @@ final class Movimento: ObservableObject {
     }
 
     func unGiro() {
-        guard let fonte else { return }
-        ferma()
-        let elemento = AVPlayerItem(asset: fonte.asset)
-        fineGiro = NotificationCenter.default.addObserver(
-            forName: .AVPlayerItemDidPlayToEndTime, object: elemento, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated {
-                guard let self, !self.inLoop else { return }
-                self.inCorso = false
-            }
-        }
-        lettore.insert(elemento, after: nil)
-        inCorso = true
-        lettore.play()
+        parti(inAnello: false)
     }
 
     func inAnello() {
+        parti(inAnello: true)
+    }
+
+    private func parti(inAnello: Bool) {
         guard let fonte else { return }
         ferma()
-        anello = AVPlayerLooper(player: lettore, templateItem: AVPlayerItem(asset: fonte.asset))
-        inLoop = true
+        let elemento = AVPlayerItem(asset: fonte.asset)
+        elemento.preferredForwardBufferDuration = 4
+        fineGiro = NotificationCenter.default.addObserver(
+            forName: .AVPlayerItemDidPlayToEndTime, object: elemento, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                if self.inLoop {
+                    self.lettore.seek(to: .zero, toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] fatto in
+                        guard fatto else { return }
+                        DispatchQueue.main.async {
+                            MainActor.assumeIsolated {
+                                guard let self, self.inLoop else { return }
+                                self.lettore.play()
+                            }
+                        }
+                    }
+                } else {
+                    self.inCorso = false
+                }
+            }
+        }
+        lettore.insert(elemento, after: nil)
+        inLoop = inAnello
         inCorso = true
         lettore.play()
     }
 
     func ferma() {
         lettore.pause()
-        anello?.disableLooping()
-        anello = nil
         if let fineGiro { NotificationCenter.default.removeObserver(fineGiro) }
         fineGiro = nil
         lettore.removeAllItems()
@@ -265,5 +275,22 @@ struct StratoVideo: UIViewRepresentable {
     final class Vista: UIView {
         override static var layerClass: AnyClass { AVPlayerLayer.self }
         var strato: AVPlayerLayer { layer as! AVPlayerLayer }
+        private var pronto: NSKeyValueObservation?
+
+        override init(frame: CGRect) {
+            super.init(frame: frame)
+            alpha = 0
+            pronto = strato.observe(\.isReadyForDisplay, options: [.initial, .new]) { [weak self] strato, _ in
+                let si = strato.isReadyForDisplay
+                DispatchQueue.main.async {
+                    guard let self else { return }
+                    UIView.animate(withDuration: si ? 0.22 : 0, delay: 0, options: [.beginFromCurrentState, .curveEaseOut]) {
+                        self.alpha = si ? 1 : 0
+                    }
+                }
+            }
+        }
+
+        required init?(coder: NSCoder) { nil }
     }
 }
