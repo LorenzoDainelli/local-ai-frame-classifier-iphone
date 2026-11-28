@@ -32,8 +32,8 @@ enum Giro {
                      testo: "Due tocchi sulla foto mettono il cuore. Con «Scegli» nella griglia prendi più foto "
                          + "e fai una raccolta. Tutto torna al PC col cavo."),
         PassoDelGiro(id: 5, simbolo: "square.stack",
-                     titolo: "Foto, Nodi, Persone",
-                     testo: "La barra in basso porta alle foto, alle categorie del PC e alle persone. "
+                     titolo: "Scatti, Nodi, Persone",
+                     testo: "La barra in basso porta agli scatti, alle categorie del PC e alle persone. "
                          + "La lente in alto cerca. Tocca di nuovo la sezione in cui sei per tornare in cima."),
         PassoDelGiro(id: 6, simbolo: "lock",
                      titolo: "Si chiude da solo",

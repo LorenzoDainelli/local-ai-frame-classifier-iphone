@@ -223,7 +223,7 @@ final class GrigliaProve: XCTestCase {
         sleep(2)
         scatta("12b-indietro-nel-tempo")
         XCTAssertFalse(pilloleVisibili(), "scorrendo le pillole devono sparire")
-        XCTAssertTrue(app.staticTexts["Foto"].firstMatch.exists, "il titolo resta sopra")
+        XCTAssertEqual(app.staticTexts["titolo"].firstMatch.label, "Scatti", "il titolo resta sopra")
         controllaPeriodo("indietro nel tempo")
         let a = XCTAttachment(string: "prima: \(inizio) · dopo: \(periodo().label)")
         a.name = "date"

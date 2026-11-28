@@ -26,8 +26,10 @@ Si usano sempre questi. Non si scrivono colori, caratteri o tempi a mano nelle s
 - **Vetro liquido** (`.vetro`, `GruppoDiVetro`, `Vetro`): acceso di base, come su iPhone, si
   spegne in Impostazioni › Aspetto con l'interruttore. Si usa solo per i comandi che
   galleggiano: tasti tondi, vetrini sopra le foto, barra in basso, barra della scelta,
-  annunci, pillole sopra le foto, testa compatta (sfumata). È il vetro chiaro di iOS, il più
-  trasparente. Nella foto aperta anche data e ora stanno in una pillola di vetro. Mai sul contenuto (righe, carte,
+  annunci, pillole, testa compatta (sfumata). È lo stesso vetro della barra di iPhone
+  (`regular`), uguale in tutta l'app; dentro il vetro scritte e simboli usano i colori di
+  sistema (`.primary`), così si leggono sopra le foto chiare e scure. Solo sopra una foto o
+  un video aperti si usa il vetro chiaro (`suFoto`). Nella foto aperta anche data e ora stanno in una pillola di vetro. Mai sul contenuto (righe, carte,
   pillole dei filtri). Spento, o con «Riduci trasparenza», o prima di iOS 26: tornano i pezzi
   pieni di prima. Il tasto A caso diventa vetro arancio. Tutto il vetro è **vivo** come il
   pallino delle barre di iOS 26: al tocco si gonfia, fa da lente e rimbalza.
@@ -56,9 +58,11 @@ Si usano sempre questi. Non si scrivono colori, caratteri o tempi a mano nelle s
   due metà stanno affiancate.
   Finché non arriva il primo pacchetto vero, il Visore ricorda la prova con le foto finte e
   la apre con Face ID. Con il primo pacchetto vero la prova sparisce.
-- **Barra in basso**: una pillola che galleggia, con solo **Foto, Nodi, Persone**. La macchia
-  arancio scivola sulla sezione scelta. Toccare di nuovo la sezione in cui sei riporta alla
-  prima pagina o in cima. Durante «Scegli» la barra sparisce.
+- **Barra in basso**: la barra vera di iPhone (iOS 26, vetro liquido di sistema), bassa come
+  in Foto, con solo **Scatti, Nodi, Persone**; la sezione scelta è arancio. Toccare di nuovo
+  la sezione in cui sei riporta alla prima pagina o in cima. Durante «Scegli» la barra sparisce.
+- **Scatti e foto**: «Scatti» è il nome della galleria (sezione, titolo, giro). «Foto» resta
+  dove si parla di una foto o del tipo foto (contro Live e video).
 - **In alto a destra**, in ogni pagina principale: la **lente (Cerca)** a sinistra
   dell'**ingranaggio (Impostazioni)**, e subito a destra il tasto **A caso**: tondo arancio
   pieno di 44 pt con le due frecce che si incrociano, 2 pt più staccato degli altri. È
@@ -72,14 +76,16 @@ Si usano sempre questi. Non si scrivono colori, caratteri o tempi a mano nelle s
   alto a gruppi di dieci, tocco a destra avanti, a sinistra indietro, al centro nasconde i
   comandi, tenere premuto ferma, due tocchi mettono il cuore, giù chiude. Le foto si muovono
   piano, i video e le Live partono da soli, l'audio sale piano.
-- **Foto**, come l'app Foto di iPhone: lo scatto più nuovo è in basso a destra, quello prima
+- **Scatti**, come l'app Foto di iPhone: lo scatto più nuovo è in basso a destra, quello prima
   alla sua sinistra, e così via; i più vecchi stanno sopra. La griglia si apre dal fondo, con
   gli ultimi scatti in vista, e salendo si torna indietro nel tempo. Non ci sono più
   intestazioni di giorni, mesi o anni: le foto stanno tutte attaccate, in una griglia sola.
-  In cima restano fermi il titolo serif «Foto», sotto la data di quello che si vede e a destra
+  In cima restano fermi il titolo serif «Scatti», sotto la data di quello che si vede e a destra
   i tasti (lente, ingranaggio, A caso); le foto scorrono sotto. Niente barra sfocata: solo una
-  sfumatura leggera del colore del fondo (chiara o scura col tema) che sparisce verso il
-  basso, perché le scritte si leggano. La data segue lo schermo e cambia con le cifre che
+  **sfumatura scura** (`SfumaturaScura`, nero dal 62% a niente) che sparisce verso il basso,
+  con titolo e data **bianchi** e un'ombra leggera, perché si leggano sopra ogni foto. La
+  stessa sfumatura e le stesse scritte bianche stanno nella testa compatta di tutte le
+  altre pagine (persona, nodo, raccolte), così tutte le teste sono uguali. La data segue lo schermo e cambia con le cifre che
   scivolano: un giorno «12 Nov 2026», lo stesso mese «8–12 Nov 2026», due mesi
   «28 Ott – 3 Nov 2026», due anni «28 Dic 2025 – 3 Gen 2026»; a 15 per riga i mesi
   («Ott–Nov 2026»), a 31 gli anni («2025–2026»). Sotto la data ci sono il conteggio e le

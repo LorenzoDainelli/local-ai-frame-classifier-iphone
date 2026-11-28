@@ -747,7 +747,7 @@ struct QuadroCasuale: View {
                 Text(scatto.video ? "Questo video non si apre qui." : "Questa foto non si apre qui.")
                     .font(.system(size: 13)).foregroundStyle(Tinta.carta)
                     .padding(.horizontal, 14).padding(.vertical, 8)
-                    .vetro(Capsule(), ripiego: .ultraThinMaterial, bordo: false)
+                    .vetro(Capsule(), ripiego: .ultraThinMaterial, bordo: false, suFoto: true)
                     .environment(\.colorScheme, .dark)
             }
         }
@@ -872,7 +872,7 @@ struct MostraCasuale: View {
                         .font(.system(size: 12.5, weight: .semibold))
                         .foregroundStyle(Tinta.carta)
                         .padding(.horizontal, 12).frame(height: 30)
-                        .vetro(Capsule(), ripiego: .ultraThinMaterial, bordo: false)
+                        .vetro(Capsule(), ripiego: .ultraThinMaterial, bordo: false, suFoto: true)
                         .environment(\.colorScheme, .dark)
                         .frame(maxHeight: .infinity, alignment: .top)
                         .padding(.top, 24)
@@ -1013,7 +1013,7 @@ struct MostraCasuale: View {
                             Text(p.nome).font(.system(size: 12)).foregroundStyle(Tinta.carta).lineLimit(1)
                         }
                         .padding(.leading, 4).padding(.trailing, 10).padding(.vertical, 4)
-                        .vetro(Capsule(), ripiego: .ultraThinMaterial, bordo: false)
+                        .vetro(Capsule(), ripiego: .ultraThinMaterial, bordo: false, suFoto: true)
                         .environment(\.colorScheme, .dark)
                     }
                 }

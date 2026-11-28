@@ -123,13 +123,13 @@ struct Pillola: View {
                 .accessibilityLabel("Togli \(testo)")
             }
         }
-        .font(.system(size: 13.5, weight: scelta ? .semibold : .regular))
-        .foregroundStyle(Tinta.ink)
+        .font(.system(size: 13.5, weight: scelta ? .semibold : .medium))
+        .foregroundStyle(scelta ? AnyShapeStyle(Tinta.suAccento) : AnyShapeStyle(.primary))
         .padding(.leading, 13)
         .padding(.trailing, togli == nil ? 13 : 7)
         .frame(height: 32)
-        .background(scelta ? Tinta.alone : Color.clear, in: Capsule())
-        .overlay(Capsule().stroke(scelta ? Color.clear : Tinta.lineaForte, lineWidth: 0.5))
+        .vetro(Capsule(), tinta: scelta ? Tinta.accento : nil, interattivo: true,
+               ripiego: scelta ? Tinta.accento : Tinta.superficie, bordo: !scelta)
         .contentShape(Capsule())
         .fixedSize()
         .animation(Moto.gesto, value: scelta)
@@ -164,7 +164,7 @@ struct Vetrino: View {
                 .contentTransition(.symbolEffect(.replace))
                 .symbolEffect(.bounce, value: acceso)
                 .frame(width: 44, height: 44)
-                .vetro(Circle(), interattivo: true, ripiego: .ultraThinMaterial, bordo: false)
+                .vetro(Circle(), interattivo: true, ripiego: .ultraThinMaterial, bordo: false, suFoto: true)
                 .environment(\.colorScheme, .dark)
                 .contentShape(Circle())
         }
@@ -281,7 +281,8 @@ struct TestaCompatta<Azioni: View>: View {
                 .buttonStyle(Premuto())
                 .accessibilityLabel("Indietro")
             }
-            Text(titolo).font(Carattere.piccolo).foregroundStyle(Tinta.ink).lineLimit(1)
+            Text(titolo).font(Carattere.piccolo).foregroundStyle(.white).lineLimit(1)
+                .shadow(color: .black.opacity(0.35), radius: 3, y: 1)
                 .frame(maxWidth: .infinity, alignment: indietro == nil ? .leading : .center)
             azioni()
         }
@@ -292,32 +293,19 @@ struct TestaCompatta<Azioni: View>: View {
 }
 
 struct FondoTesta: View {
-    @AppStorage(Vetro.chiave) private var vetro = true
-
     var body: some View {
-        if Vetro.vero(vetro) {
-            Rectangle().fill(.ultraThinMaterial)
-                .mask(LinearGradient(stops: [.init(color: .black, location: 0), .init(color: .black, location: 0.55),
-                                             .init(color: .clear, location: 1)],
-                                     startPoint: .top, endPoint: .bottom))
-                .padding(.bottom, -18)
-                .ignoresSafeArea(edges: .top)
-                .allowsHitTesting(false)
-        } else {
-            Rectangle().fill(.bar)
-                .overlay(alignment: .bottom) { Rectangle().fill(Tinta.linea).frame(height: 0.5) }
-                .ignoresSafeArea(edges: .top)
-        }
+        SfumaturaScura(sotto: 22)
     }
 }
 
-struct SfumaturaTesta: View {
-    var sotto: CGFloat = 28
+struct SfumaturaScura: View {
+    var sotto: CGFloat = 40
 
     var body: some View {
-        LinearGradient(stops: [.init(color: Tinta.fondo.opacity(0.94), location: 0),
-                               .init(color: Tinta.fondo.opacity(0.72), location: 0.45),
-                               .init(color: Tinta.fondo.opacity(0), location: 1)],
+        LinearGradient(stops: [.init(color: .black.opacity(0.62), location: 0),
+                               .init(color: .black.opacity(0.42), location: 0.4),
+                               .init(color: .black.opacity(0.16), location: 0.75),
+                               .init(color: .black.opacity(0), location: 1)],
                        startPoint: .top, endPoint: .bottom)
             .padding(.bottom, -sotto)
             .ignoresSafeArea(edges: .top)
@@ -502,7 +490,7 @@ struct FacciaVetrino: View {
             .font(.system(size: 17, weight: .medium))
             .foregroundStyle(Tinta.carta)
             .frame(width: 44, height: 44)
-            .vetro(Circle(), interattivo: true, ripiego: .ultraThinMaterial, bordo: false)
+            .vetro(Circle(), interattivo: true, ripiego: .ultraThinMaterial, bordo: false, suFoto: true)
             .environment(\.colorScheme, .dark)
             .contentShape(Circle())
     }
@@ -513,8 +501,8 @@ struct FacciaTondo: View {
 
     var body: some View {
         Image(systemName: simbolo)
-            .font(.system(size: 15, weight: .medium))
-            .foregroundStyle(Tinta.attenuato)
+            .font(.system(size: 15, weight: .semibold))
+            .foregroundStyle(.primary)
             .frame(width: 38, height: 38)
             .vetro(Circle(), interattivo: true)
             .contentShape(Circle())
@@ -593,6 +581,12 @@ enum Vetro {
         if #available(iOS 26.0, *) { return true }
         return false
     }
+
+    @available(iOS 26.0, *)
+    static func vetro(suFoto: Bool, tinta: Color?, interattivo: Bool) -> Glass {
+        let base = (suFoto ? Glass.clear : Glass.regular).tint(tinta)
+        return interattivo ? base.interactive() : base
+    }
 }
 
 struct ConVetro<Forma: Shape>: ViewModifier {
@@ -602,13 +596,14 @@ struct ConVetro<Forma: Shape>: ViewModifier {
     var ripiego: AnyShapeStyle
     var bordo: Bool
     var ombra: Bool
+    var suFoto: Bool
     @AppStorage(Vetro.chiave) private var scelto = true
     @Environment(\.accessibilityReduceTransparency) private var poca
 
     @ViewBuilder
     func body(content: Content) -> some View {
         if #available(iOS 26.0, *), scelto, !poca {
-            content.glassEffect(Glass.clear.tint(tinta).interactive(), in: forma)
+            content.glassEffect(Vetro.vetro(suFoto: suFoto, tinta: tinta, interattivo: interattivo), in: forma)
         } else {
             content
                 .background(ripiego, in: forma)
@@ -634,13 +629,15 @@ struct GruppoDiVetro<Dentro: View>: View {
 
 extension View {
     func vetro<F: Shape, S: ShapeStyle>(_ forma: F, tinta: Color? = nil, interattivo: Bool = false,
-                                        ripiego: S, bordo: Bool = true, ombra: Bool = false) -> some View {
+                                        ripiego: S, bordo: Bool = true, ombra: Bool = false,
+                                        suFoto: Bool = false) -> some View {
         modifier(ConVetro(forma: forma, tinta: tinta, interattivo: interattivo, ripiego: AnyShapeStyle(ripiego),
-                          bordo: bordo, ombra: ombra))
+                          bordo: bordo, ombra: ombra, suFoto: suFoto))
     }
 
     func vetro<F: Shape>(_ forma: F, tinta: Color? = nil, interattivo: Bool = false,
-                         bordo: Bool = true, ombra: Bool = false) -> some View {
-        vetro(forma, tinta: tinta, interattivo: interattivo, ripiego: Tinta.superficie, bordo: bordo, ombra: ombra)
+                         bordo: Bool = true, ombra: Bool = false, suFoto: Bool = false) -> some View {
+        vetro(forma, tinta: tinta, interattivo: interattivo, ripiego: Tinta.superficie, bordo: bordo, ombra: ombra,
+              suFoto: suFoto)
     }
 }

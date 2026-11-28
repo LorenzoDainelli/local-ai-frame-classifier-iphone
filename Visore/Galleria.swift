@@ -697,12 +697,15 @@ struct TestaFoto<Azioni: View, Sotto: View>: View {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(titolo)
                         .font(Carattere.titolo)
-                        .foregroundStyle(Tinta.ink)
+                        .foregroundStyle(.white)
+                        .shadow(color: .black.opacity(0.35), radius: 3, y: 1)
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
+                        .accessibilityIdentifier("titolo")
                     Text(data ?? " ")
-                        .font(Carattere.piccolo)
-                        .foregroundStyle(Tinta.attenuato)
+                        .font(Carattere.piccolo.weight(.semibold))
+                        .foregroundStyle(.white.opacity(0.94))
+                        .shadow(color: .black.opacity(0.4), radius: 2.5, y: 1)
                         .monospacedDigit()
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
@@ -724,7 +727,8 @@ struct TestaFoto<Azioni: View, Sotto: View>: View {
                 if let conteggio {
                     Text(conteggio)
                         .font(Carattere.minore)
-                        .foregroundStyle(Tinta.tenue)
+                        .foregroundStyle(.white.opacity(0.85))
+                        .shadow(color: .black.opacity(0.4), radius: 2.5, y: 1)
                         .lineLimit(1)
                         .padding(.horizontal, 16)
                         .allowsHitTesting(false)
@@ -739,7 +743,7 @@ struct TestaFoto<Azioni: View, Sotto: View>: View {
         }
         .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { altoTutto = $0 }
         .background(alignment: .top) {
-            SfumaturaTesta(sotto: nascosto ? 28 - max(0, altoTutto - altoCima) : 28)
+            SfumaturaScura(sotto: nascosto ? 40 - max(0, altoTutto - altoCima) : 40)
         }
         .animation(Moto.scena, value: nascosto)
     }

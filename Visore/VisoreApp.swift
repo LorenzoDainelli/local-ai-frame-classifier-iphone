@@ -533,7 +533,7 @@ enum Sezione: String, CaseIterable, Identifiable {
 
     var nome: String {
         switch self {
-        case .foto: return "Foto"
+        case .foto: return "Scatti"
         case .nodi: return "Nodi"
         case .persone: return "Persone"
         }
@@ -559,42 +559,6 @@ final class Interfaccia: ObservableObject {
     var inAttesa: GiroCasuale?
 }
 
-struct BarraPillola: View {
-    @Binding var qui: Sezione
-    let ancora: (Sezione) -> Void
-    @Namespace private var macchia
-
-    var body: some View {
-        HStack(spacing: 2) {
-            ForEach(Sezione.allCases) { s in
-                Button {
-                    if qui == s { ancora(s) } else { withAnimation(Moto.molla) { qui = s } }
-                } label: {
-                    VStack(spacing: 2) {
-                        Image(systemName: s.simbolo).font(.system(size: 18, weight: .regular))
-                            .frame(height: 22)
-                        Text(s.nome).font(.system(size: 10.5, weight: .medium))
-                    }
-                    .foregroundStyle(qui == s ? Tinta.ink : Tinta.tenue)
-                    .frame(width: 76, height: 48)
-                    .background {
-                        if qui == s {
-                            Capsule().fill(Tinta.alone).matchedGeometryEffect(id: "macchia", in: macchia)
-                        }
-                    }
-                    .contentShape(Capsule())
-                }
-                .buttonStyle(Premuto(quanto: 0.94))
-                .accessibilityLabel(s.nome)
-                .accessibilityAddTraits(qui == s ? .isSelected : [])
-            }
-        }
-        .padding(5)
-        .vetro(Capsule(), interattivo: true, ripiego: .regularMaterial, ombra: true)
-        .sensoryFeedback(.selection, trigger: qui)
-    }
-}
-
 struct Galleria: View {
     let pacchetto: Pacchetto
     @EnvironmentObject var cassetto: Cassetto
@@ -607,36 +571,32 @@ struct Galleria: View {
     @AppStorage(Giro.chiave) private var giroVisto = false
 
     var body: some View {
-        ZStack(alignment: .bottom) {
+        TabView(selection: scelta) {
             ForEach(Sezione.allCases) { s in
-                NavigationStack(path: strada(s)) {
-                    radice(s)
-                        .destinazioni(pacchetto)
+                Tab(s.nome, systemImage: s.simbolo, value: s) {
+                    NavigationStack(path: strada(s)) {
+                        radice(s)
+                            .destinazioni(pacchetto)
+                    }
+                    .environment(\.vaiA) { strade[s, default: NavigationPath()].spingi($0) }
+                    .environment(\.torna) { if strade[s]?.isEmpty == false { strade[s]?.removeLast() } }
+                    .toolbar(interfaccia.scegliendo ? .hidden : .visible, for: .tabBar)
                 }
-                .environment(\.vaiA) { strade[s, default: NavigationPath()].spingi($0) }
-                .environment(\.torna) { if strade[s]?.isEmpty == false { strade[s]?.removeLast() } }
-                .opacity(qui == s ? 1 : 0)
-                .allowsHitTesting(qui == s)
-                .accessibilityHidden(qui != s)
             }
-            if !interfaccia.scegliendo {
-                VStack(spacing: 10) {
-                    if let scade = Firma.scadenza(), Firma.giorni(fino: scade) <= 2 {
-                        Text(Firma.aParole(fino: scade) + " Rinnovala con AltStore sul portatile.")
-                            .font(.system(size: 12.5, weight: .semibold))
-                            .foregroundStyle(Tinta.suAccento)
-                            .multilineTextAlignment(.center)
-                            .padding(.horizontal, 14).padding(.vertical, 7)
-                            .background(Tinta.attenzione, in: Capsule())
-                            .padding(.horizontal, 24)
-                            .allowsHitTesting(false)
-                    }
-                    BarraPillola(qui: $qui) { s in
-                        if strade[s]?.isEmpty == false { strade[s] = NavigationPath() } else { cima[s, default: 0] += 1 }
-                    }
-                }
-                .padding(.bottom, 4)
-                .transition(.move(edge: .bottom).combined(with: .opacity))
+        }
+        .tint(Tinta.accento)
+        .sensoryFeedback(.selection, trigger: qui)
+        .overlay(alignment: .bottom) {
+            if !interfaccia.scegliendo, let scade = Firma.scadenza(), Firma.giorni(fino: scade) <= 2 {
+                Text(Firma.aParole(fino: scade) + " Rinnovala con AltStore sul portatile.")
+                    .font(.system(size: 12.5, weight: .semibold))
+                    .foregroundStyle(Tinta.suAccento)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 14).padding(.vertical, 7)
+                    .background(Tinta.attenzione, in: Capsule())
+                    .padding(.horizontal, 24)
+                    .padding(.bottom, 64)
+                    .allowsHitTesting(false)
             }
         }
         .animation(Moto.passo, value: interfaccia.scegliendo)
@@ -687,6 +647,16 @@ struct Galleria: View {
         }
     }
 
+    private var scelta: Binding<Sezione> {
+        Binding(get: { qui }, set: { nuova in
+            if nuova == qui {
+                if strade[nuova]?.isEmpty == false { strade[nuova] = NavigationPath() } else { cima[nuova, default: 0] += 1 }
+            } else {
+                qui = nuova
+            }
+        })
+    }
+
     private func strada(_ s: Sezione) -> Binding<NavigationPath> {
         Binding(get: { strade[s] ?? NavigationPath() }, set: { strade[s] = $0 })
     }
@@ -695,7 +665,7 @@ struct Galleria: View {
     private func radice(_ s: Sezione) -> some View {
         switch s {
         case .foto:
-            GrigliaGiorni(pacchetto: pacchetto, titolo: "Foto", radice: true, cima: cima[.foto] ?? 0)
+            GrigliaGiorni(pacchetto: pacchetto, titolo: "Scatti", radice: true, cima: cima[.foto] ?? 0)
         case .nodi:
             Albero(pacchetto: pacchetto, cima: cima[.nodi] ?? 0)
         case .persone:
