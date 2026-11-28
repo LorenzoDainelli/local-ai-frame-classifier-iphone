@@ -62,6 +62,18 @@ struct FotoAperta: View {
     @State private var giu: CGFloat = 0
     @State private var caricate = 0
 
+    init(pacchetto: Pacchetto, elenco: Elenco, inizio: Int, visto: Binding<Int64>,
+         raccolta: Int64? = nil, rovescio: Bool = false) {
+        self.pacchetto = pacchetto
+        self.elenco = elenco
+        self.inizio = inizio
+        self._visto = visto
+        self.raccolta = raccolta
+        self.rovescio = rovescio
+        let primo = elenco.scatti.indices.contains(inizio) ? elenco.scatti[inizio].id : nil
+        self._corrente = State(initialValue: primo)
+    }
+
     var body: some View {
         ZStack {
             (controlli ? Tinta.fondo : Color.black)
@@ -192,41 +204,57 @@ struct Striscia: View {
     @ObservedObject var elenco: Elenco
     @Binding var corrente: Int64?
     var rovescio = false
+    @State private var alCentro: Int64?
+    @State private var dito = false
 
     var body: some View {
         GeometryReader { g in
-            ScrollViewReader { proxy in
-                ScrollView(.horizontal) {
-                    LazyHStack(spacing: 2) {
-                        ForEach(elenco.scatti) { s in
-                            let qui = s.id == corrente
-                            Fotina(pacchetto: pacchetto, scatto: s)
-                                .frame(width: qui ? 58 : 30, height: 46)
-                                .clipShape(RoundedRectangle(cornerRadius: qui ? 5 : 2, style: .continuous))
-                                .padding(.horizontal, qui ? 6 : 0)
-                                .scaleEffect(x: rovescio ? -1 : 1, y: 1)
-                                .contentShape(Rectangle())
-                                .id(s.id)
-                                .onTapGesture {
-                                    var t = Transaction()
-                                    t.disablesAnimations = true
-                                    withTransaction(t) { corrente = s.id }
-                                }
-                                .onAppear { if s.id == elenco.scatti.last?.id { elenco.altri() } }
-                        }
+            ScrollView(.horizontal) {
+                LazyHStack(spacing: 2) {
+                    ForEach(elenco.scatti) { s in
+                        let qui = s.id == corrente && !dito
+                        Fotina(pacchetto: pacchetto, scatto: s)
+                            .frame(width: qui ? 58 : 30, height: 46)
+                            .clipShape(RoundedRectangle(cornerRadius: qui ? 5 : 2, style: .continuous))
+                            .padding(.horizontal, qui ? 6 : 0)
+                            .scaleEffect(x: rovescio ? -1 : 1, y: 1)
+                            .contentShape(Rectangle())
+                            .id(s.id)
+                            .onTapGesture { vaiA(s.id) }
+                            .onAppear { if s.id == elenco.scatti.last?.id { elenco.altri() } }
                     }
-                    .padding(.horizontal, max(0, g.size.width / 2 - 35))
                 }
-                .scaleEffect(x: rovescio ? -1 : 1, y: 1)
-                .scrollIndicators(.hidden)
-                .animation(Moto.passo, value: corrente)
-                .onAppear { if let corrente { proxy.scrollTo(corrente, anchor: .center) } }
-                .onChange(of: corrente) { _, nuovo in
-                    if let nuovo { withAnimation(Moto.passo) { proxy.scrollTo(nuovo, anchor: .center) } }
+                .scrollTargetLayout()
+            }
+            .contentMargins(.horizontal, max(0, g.size.width / 2 - 15), for: .scrollContent)
+            .scaleEffect(x: rovescio ? -1 : 1, y: 1)
+            .scrollIndicators(.hidden)
+            .scrollTargetBehavior(.viewAligned)
+            .scrollPosition(id: $alCentro, anchor: .center)
+            .onScrollPhaseChange { _, fase in
+                let ora = fase == .interacting || fase == .decelerating
+                if ora != dito { withAnimation(Moto.molla) { dito = ora } }
+                if !ora, let corrente, alCentro != corrente {
+                    withAnimation(Moto.passo) { alCentro = corrente }
                 }
             }
+            .onChange(of: alCentro) { _, nuovo in
+                guard dito, let nuovo, nuovo != corrente else { return }
+                vaiA(nuovo)
+            }
+            .onChange(of: corrente) { _, nuovo in
+                guard !dito, let nuovo, nuovo != alCentro else { return }
+                withAnimation(Moto.passo) { alCentro = nuovo }
+            }
+            .onAppear { alCentro = corrente }
         }
         .sensoryFeedback(.selection, trigger: corrente)
+    }
+
+    private func vaiA(_ id: Int64) {
+        var t = Transaction()
+        t.disablesAnimations = true
+        withTransaction(t) { corrente = id }
     }
 }
 
@@ -292,6 +320,7 @@ struct Pagina: View {
             }
             if (scatto.live || scatto.video), movimento.inCorso {
                 StratoVideo(lettore: movimento.lettore)
+                    .allowedDynamicRange(.high)
                     .allowsHitTesting(false)
             }
         }

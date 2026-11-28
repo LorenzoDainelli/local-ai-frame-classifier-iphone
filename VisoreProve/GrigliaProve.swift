@@ -130,6 +130,27 @@ final class GrigliaProve: XCTestCase {
         XCTAssertTrue(griglia.exists)
     }
 
+    func testIndietroNeiNodi() {
+        _ = apri()
+        let sezione = app.buttons["Nodi"].firstMatch
+        XCTAssertTrue(sezione.waitForExistence(timeout: 10))
+        sezione.tap()
+        sleep(1)
+        let nodo = app.buttons.matching(identifier: "nodo").firstMatch
+        XCTAssertTrue(nodo.waitForExistence(timeout: 10), "nella sezione Nodi non c'è nessun nodo")
+        nodo.tap()
+        sleep(2)
+        scatta("10-dentro-un-nodo")
+        let indietro = app.buttons["Indietro"].firstMatch
+        XCTAssertTrue(indietro.waitForExistence(timeout: 10), "dentro un nodo manca il tasto indietro")
+        indietro.tap()
+        sleep(2)
+        scatta("11-tornato-ai-nodi")
+        XCTAssertTrue(app.buttons.matching(identifier: "nodo").firstMatch.waitForExistence(timeout: 5),
+                      "il tasto indietro del nodo non torna all'elenco dei nodi")
+        XCTAssertFalse(app.buttons["Indietro"].firstMatch.exists, "dopo indietro si è ancora dentro il nodo")
+    }
+
     func testRaccolteDallaPillola() {
         _ = apri()
         let raccolte = app.buttons["Raccolte"].firstMatch

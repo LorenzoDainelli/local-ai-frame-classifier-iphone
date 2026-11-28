@@ -614,6 +614,7 @@ struct Galleria: View {
                         .destinazioni(pacchetto)
                 }
                 .environment(\.vaiA) { strade[s, default: NavigationPath()].spingi($0) }
+                .environment(\.torna) { if strade[s]?.isEmpty == false { strade[s]?.removeLast() } }
                 .opacity(qui == s ? 1 : 0)
                 .allowsHitTesting(qui == s)
                 .accessibilityHidden(qui != s)
@@ -668,6 +669,7 @@ struct Galleria: View {
                     .destinazioni(pacchetto)
             }
             .environment(\.vaiA) { stradaCerca.spingi($0) }
+            .environment(\.torna) { if !stradaCerca.isEmpty { stradaCerca.removeLast() } }
             .environmentObject(cassetto)
             .environmentObject(interfaccia)
             .environmentObject(annunci)

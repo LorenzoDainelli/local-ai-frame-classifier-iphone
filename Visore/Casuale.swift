@@ -734,6 +734,7 @@ struct QuadroCasuale: View {
             }
             if scatto.live || scatto.video {
                 StratoVideo(lettore: movimento.lettore)
+                    .allowedDynamicRange(.high)
                     .opacity(movimento.inCorso ? 1 : 0)
                     .allowsHitTesting(false)
             }

@@ -201,6 +201,7 @@ extension NavigationPath {
 
 extension EnvironmentValues {
     @Entry var vaiA: ((any Hashable) -> Void)? = nil
+    @Entry var torna: (() -> Void)? = nil
 }
 
 struct Collegamento<Valore: Hashable, Etichetta: View>: View {

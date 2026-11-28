@@ -69,6 +69,7 @@ struct ElencoNodi: View {
                     RigaNodo(pacchetto: pacchetto, nodo: nodo, numero: soloQui ? nodo.quanti : nodo.quantiColRamo)
                 }
                 .buttonStyle(PremibileVivo())
+                .accessibilityIdentifier("nodo")
                 .entra(i)
             }
         }

@@ -275,6 +275,7 @@ struct GrigliaGiorni: View {
     @EnvironmentObject var annunci: Annunci
     @Environment(\.dismiss) private var indietro
     @Environment(\.vaiA) private var vaiA
+    @Environment(\.torna) private var tornaNellaStrada
     @StateObject private var elenco: Elenco
     @State private var scelti: Set<Int64>?
     @State private var chiedeTogli = false
@@ -421,6 +422,7 @@ struct GrigliaGiorni: View {
         .environmentObject(interfaccia)
         .environmentObject(annunci)
         .environment(\.vaiA, vaiA)
+        .environment(\.torna, tornaNellaStrada)
         .tint(Tinta.accento)
     }
 
@@ -462,6 +464,7 @@ struct GrigliaGiorni: View {
 
     private var torna: (() -> Void)? {
         if radice || !conIndietro { return nil }
+        if let tornaNellaStrada { return tornaNellaStrada }
         return { indietro() }
     }
 

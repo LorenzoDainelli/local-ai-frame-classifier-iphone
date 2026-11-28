@@ -204,11 +204,16 @@ struct RaccolteVista: View {
     let pacchetto: Pacchetto
     @EnvironmentObject var cassetto: Cassetto
     @EnvironmentObject var annunci: Annunci
-    @Environment(\.dismiss) private var indietro
+    @Environment(\.dismiss) private var chiudi
+    @Environment(\.torna) private var torna
     @State private var daButtare: Raccolta?
     @State private var daRinominare: Raccolta?
     @State private var nome = ""
     @State private var compatta = false
+
+    private func indietro() {
+        if let torna { torna() } else { chiudi() }
+    }
 
     var body: some View {
         ScrollView {

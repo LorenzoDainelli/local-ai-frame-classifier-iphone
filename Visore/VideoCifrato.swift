@@ -94,15 +94,27 @@ final class Movimento: ObservableObject {
     @Published private(set) var rotto = false
     @Published private(set) var secondi: Double = 0
     @Published private(set) var durata: Double = 0
+    @Published private(set) var inPausa = true
 
     let lettore = AVQueuePlayer()
     private var fonte: VideoCifrato?
     private var fineGiro: NSObjectProtocol?
     private var orologio: Any?
+    private var stato: NSKeyValueObservation?
 
     init() {
         lettore.isMuted = true
         lettore.actionAtItemEnd = .pause
+        lettore.automaticallyWaitsToMinimizeStalling = false
+        stato = lettore.observe(\.rate, options: [.initial, .new]) { [weak self] lettore, _ in
+            let fermo = lettore.rate == 0
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    guard let self, self.inPausa != fermo else { return }
+                    self.inPausa = fermo
+                }
+            }
+        }
         orologio = lettore.addPeriodicTimeObserver(forInterval: CMTime(value: 1, timescale: 10), queue: .main) { [weak self] t in
             guard t.isNumeric else { return }
             MainActor.assumeIsolated { self?.secondi = t.seconds }
@@ -112,6 +124,8 @@ final class Movimento: ObservableObject {
     func chiudi() {
         ferma()
         if let orologio { lettore.removeTimeObserver(orologio) }
+        stato?.invalidate()
+        stato = nil
         orologio = nil
         if let fineGiro { NotificationCenter.default.removeObserver(fineGiro) }
         fineGiro = nil
@@ -191,8 +205,6 @@ final class Movimento: ObservableObject {
         insegui(s, esatta: true)
     }
 
-    var inPausa: Bool { lettore.timeControlStatus != .playing }
-
     var adesso: Double {
         if let meta { return meta.seconds }
         let t = lettore.currentTime()
@@ -252,8 +264,21 @@ final class Movimento: ObservableObject {
     }
 
     func pausaOVai() {
-        if lettore.timeControlStatus == .playing { lettore.pause() } else { lettore.play() }
-        objectWillChange.send()
+        if !inPausa {
+            lettore.pause()
+            return
+        }
+        if lettore.currentItem == nil {
+            parti(inAnello: inLoop)
+            return
+        }
+        if let item = lettore.currentItem, item.duration.isNumeric,
+           lettore.currentTime() >= item.duration - CMTime(value: 1, timescale: 30) {
+            insegui(0, esatta: true)
+            ripartire = true
+            return
+        }
+        lettore.play()
     }
 }
 
@@ -280,6 +305,7 @@ struct StratoVideo: UIViewRepresentable {
         override init(frame: CGRect) {
             super.init(frame: frame)
             alpha = 0
+            strato.wantsExtendedDynamicRangeContent = true
             pronto = strato.observe(\.isReadyForDisplay, options: [.initial, .new]) { [weak self] strato, _ in
                 let si = strato.isReadyForDisplay
                 DispatchQueue.main.async {
